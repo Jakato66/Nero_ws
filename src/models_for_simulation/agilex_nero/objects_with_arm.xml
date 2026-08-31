@@ -110,8 +110,18 @@
 
     <!-- Add  new objects here -->
       <!--Cubo estatico-->
-      <geom name="static_cube" type="box" pos="0.5 0.5 0.5" size="0.1 0.1 0.1" rgba="0.8 0.8 0.8 1" contype="1" conaffinity="1" condim="4"/>
+      <geom name="static_cube" type="box" pos="0.5 0.5 0.5" size="0.1 0.1 0.1" rgba="0 0.8 0 1" contype="1" conaffinity="1" condim="4"/>
       <!--Cilindro estatico-->
+      <geom name="static_cylinder"
+      type="cylinder"
+      pos="1.0 0.5 0.5"
+      size="0.1 0.05"
+      rgba="0.8 0 0 1"
+      contype="1"
+      conaffinity="1"
+      condim="4"/>
+      <!--Esfera estatico-->
+      <geom name="static_sphere" type="sphere" pos="1.5 0.5 0.5" size="0.1" rgba="0 0 0.8 1" contype="1" conaffinity="1" condim="4"/>
   </worldbody>
 
   <contact>
