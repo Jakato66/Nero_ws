@@ -1,0 +1,14 @@
+# ROS/colcon generated folders
+build/
+install/
+log/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# VS Code settings
+.vscode/
