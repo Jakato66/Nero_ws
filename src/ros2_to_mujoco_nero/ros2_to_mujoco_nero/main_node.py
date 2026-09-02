@@ -15,10 +15,45 @@ class MainNode(Node):
         self.timer_pr = 0.01 # 100Hz
         
         # publishers
-        self.publishers = self.create_publisher(Bool, 'start_simulation', 10)
+        self.publishers = self.create_publisher(Bool, 'start_running_nodes', 10)
         
         #timers
         self.timer = self.create_timer(self.timer_pr, self.timer_callback)
         
         #subscriptions
+        self.subscription = self.create_subscription(Bool, 'mujoco_ready', self.mujoco_ready_callback, 10)
+        self.subscription = self.create_subscription(Bool, 'interface_ready', self.interface_ready_callback, 10)
+        self.subscription = self.create_subscription(Bool, 'controler_ready', self.controller_ready_callback, 10)
+        self.subscription = self.create_subscription(Bool, 'intermediary_ready', self.intermediary_ready_callback, 10)
         
+    # callbacks
+    def timer_callback(self):
+        self.get_logger().info('Main node is running.')
+        self.publishers.publish(Bool(data=True))
+
+    def mujoco_ready_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Mujoco is ready.')
+
+    def interface_ready_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Interface is ready.')
+
+    def controller_ready_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Controller is ready.')
+
+    def intermediary_ready_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Intermediary is ready.')
+            
+            
+def main(args=None):
+    rclpy.init(args=args)
+    main_node = MainNode()
+    try:
+        rclpy.spin(main_node)
+    except KeyboardInterrupt:
+        pass
+    main_node.destroy_node()
+    rclpy.shutdown()
