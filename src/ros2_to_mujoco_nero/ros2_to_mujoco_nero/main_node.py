@@ -15,7 +15,7 @@ class MainNode(Node):
         self.timer_pr = 0.01 # 100Hz
         
         # publishers
-        self.publishers = self.create_publisher(Bool, 'start_running_nodes', 10)
+        self.publisher = self.create_publisher(Bool, 'start_running_nodes', 10)
         
         #timers
         self.timer = self.create_timer(self.timer_pr, self.timer_callback)
@@ -29,7 +29,7 @@ class MainNode(Node):
     # callbacks
     def timer_callback(self):
         self.get_logger().info('Main node is running.')
-        self.publishers.publish(Bool(data=True))
+        self.publisher.publish(Bool(data=True))
 
     def mujoco_ready_callback(self, msg):
         if msg.data:
