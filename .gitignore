@@ -12,3 +12,6 @@ log/
 
 # VS Code settings
 .vscode/
+
+# pycache
+__pycache__/
