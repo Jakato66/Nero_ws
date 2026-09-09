@@ -94,3 +94,4 @@ class InverseKinematicsNode(Node):
             # Eventually, this can be change by a parameter upload at the launch moment.
             # Here you can add logic to load the model if needed
             self.assign_model_data(self.init_q, self.init_vel)
+    
