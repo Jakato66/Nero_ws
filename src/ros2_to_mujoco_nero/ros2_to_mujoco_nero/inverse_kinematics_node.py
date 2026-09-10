@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from click import command
+
 import rclpy
 import os
 import sys
@@ -9,6 +11,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
 from sensor_msgs.msg import JointState
+from rosgraph_msgs.msg import Clock
 
 
 """This nodes handle the inverse kinematics calculation and send the reasult to 
@@ -39,20 +42,28 @@ class InverseKinematicsNode(Node):
         
         #publishers
         self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
-        self.publisher_result = self.create_publisher(Float64MultiArray, 'inverse_kinematics_result', 10)
+        self.publisher_result = self.create_publisher(Float64MultiArray, '/inverse_kinematics_result', 10)
         
         #subscriptions
         self.subscription = self.create_subscription(Bool, 'start_running_nodes', self.start_running_nodes_callback, 10)
         self.state_subscription = self.create_subscription(Float64MultiArray, 'init_state_robot', self.state_callback, 10)
         self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
-        self.get_model_path_subscription = self.create_subscription(String, 'model_path', self.get_model_callback, 10)
-        
+        self.get_model_path_subscription = self.create_subscription(String, '/model_path', self.get_model_callback, 10)
+    
     def start_running_nodes_callback(self, msg):
         if msg.data:
             self.get_logger().info('Starting Inverse Kinematics Node.')
+            # command for test
+            command = Float64MultiArray()
+            command.data = [0.0] * 7
+            self.publisher_result.publish(command)
+            
             self.publisher_state.publish(Bool(data=True))
+            
+            
     # The information about the initial state en velocity should be received from the main node or the controller node
     # at de beginning of the simulation or the system.
+    
     def state_callback(self, msg):
         if msg.data:
             self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
@@ -92,7 +103,7 @@ class InverseKinematicsNode(Node):
             self.get_logger().error('Model or robot data is not initialized. Cannot assign data.')
        
         
-    def get_model(self, msg):
+    def get_model_callback(self, msg):
         if msg.data:
             self.model_path = msg.data
             self.model = mujoco.MjModel.from_xml_path(self.model_path)
@@ -102,3 +113,19 @@ class InverseKinematicsNode(Node):
             # Here you can add logic to load the model if needed
             self.assign_model_data(self.init_q, self.init_vel)
     
+    
+def main(args=None):
+    rclpy.init(args=args)
+    inverse_kinematics_node = InverseKinematicsNode()
+    try:
+        rclpy.spin(inverse_kinematics_node)
+    except KeyboardInterrupt:
+        pass
+    inverse_kinematics_node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+    
+# Este nodo debe usar el reloj de la simulacion, con el siguiente parametro
+#ros2 run ros2_to_mujoco_nero inverse_kinematics_node --ros-args -p use_sim_time:=true

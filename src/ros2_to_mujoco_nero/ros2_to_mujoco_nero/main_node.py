@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
+import os
 from rclpy.node import Node
 from std_msgs.msg import String, Bool, Int8
 """This node has to be started after the ros2_to_mujoco_nero package has been 
@@ -13,9 +14,11 @@ class MainNode(Node):
         
         # atributes
         self.timer_pr = 0.01 # 100Hz
+        self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
         
         # publishers
         self.publisher = self.create_publisher(Bool, 'start_running_nodes', 10)
+        self.publisher_model_path = self.create_publisher(String, '/model_path', 10)
         
         #timers
         self.timer = self.create_timer(self.timer_pr, self.timer_callback)

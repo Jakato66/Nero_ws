@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
 from sensor_msgs.msg import JointState
+from rosgraph_msgs.msg import Clock
 
 """This node handle the mujoco simulator"""
 
@@ -24,15 +25,23 @@ class MujocoNode(Node):
         # atributes
         self.timer_pr = 0.01 # 100Hz
         self.start_requested = False
+        self.last_command = None
         # This may change if needed
         self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
         
         # publishers
         self.publisher_state_ready = self.create_publisher(Bool, '/mujoco_ready', latch_qos)
         self.publisher_joint_state = self.create_publisher(JointState, '/joint_states', latch_qos)
+        self.publisher_clock_sim = self.create_publisher(Clock, '/clock', latch_qos)
         
         #subscriptions
         self.subscription = self.create_subscription(Bool, '/start_running_nodes', self.start_running_nodes_callback, 10)
+        self.subscription = self.create_subscription(Float64MultiArray, '/inverse_kinematics_result', self.inverse_kinematics_result_callback, 10)
+    
+    def inverse_kinematics_result_callback(self, msg):
+        # get the data form the msg
+        self.last_command = msg.data
+        
         
     def start_running_nodes_callback(self, msg):
         if msg.data and not self.start_requested:
@@ -40,6 +49,31 @@ class MujocoNode(Node):
             self.publisher_state_ready.publish(Bool(data=True))
             # Start the mujoco simulator 
             self.start_requested = True
+    
+    def update_simulation(self, model, data):
+        # apply the last command received from the inverse kinematics node
+        if self.last_command is not None:
+            num_actuators = min(len(self.last_command), len(data.ctrl))
+            data.ctrl[:num_actuators] = self.last_command[:num_actuators]
+            
+        # update simulation
+        mujoco.mj_step(model, data)
+        
+        # share clock
+        clock_msg = Clock()
+        # convert units
+        sec = int(data.time)
+        nanosec = int((data.time - sec) * 1e9)
+        clock_msg.clock.sec = sec
+        clock_msg.clock.nanosec = nanosec
+        self.publisher_clock_sim.publish(clock_msg)
+        
+        # share joint states
+        joint_state_msg = JointState()
+        joint_state_msg.position = data.qpos[:7].tolist()
+        self.publisher_joint_state.publish(joint_state_msg)
+        
+        
             
 def main(args=None):
     rclpy.init(args=args)
@@ -68,7 +102,7 @@ def main(args=None):
             while rclpy.ok() and viewer.is_running():
                 rclpy.spin_once(mujoco_node, timeout_sec=0.0)
 
-                mujoco.mj_step(model, data)
+                mujoco_node.update_simulation(model, data)
                 viewer.sync()
 
                 time.sleep(model.opt.timestep)
