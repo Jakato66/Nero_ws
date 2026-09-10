@@ -25,6 +25,7 @@ class MujocoNode(Node):
         # atributes
         self.timer_pr = 0.01 # 100Hz
         self.start_requested = False
+        self.ready_sent = False
         self.last_command = None
         # This may change if needed
         self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
@@ -35,7 +36,12 @@ class MujocoNode(Node):
         self.publisher_clock_sim = self.create_publisher(Clock, '/clock', latch_qos)
         
         #subscriptions
-        self.subscription = self.create_subscription(Bool, '/start_running_nodes', self.start_running_nodes_callback, 10)
+        self.subscription = self.create_subscription(
+            Bool,
+            '/start_running_nodes',
+            self.start_running_nodes_callback,
+            latch_qos,
+        )
         self.subscription = self.create_subscription(Float64MultiArray, '/inverse_kinematics_result', self.inverse_kinematics_result_callback, 10)
     
     def inverse_kinematics_result_callback(self, msg):
@@ -46,8 +52,6 @@ class MujocoNode(Node):
     def start_running_nodes_callback(self, msg):
         if msg.data and not self.start_requested:
             self.get_logger().info('Starting Mujoco simulator.')
-            self.publisher_state_ready.publish(Bool(data=True))
-            # Start the mujoco simulator 
             self.start_requested = True
     
     def update_simulation(self, model, data):
@@ -97,7 +101,9 @@ def main(args=None):
         )
 
         with mujoco.viewer.launch_passive(model, data) as viewer:
-            mujoco_node.publisher_state_ready.publish(Bool(data=True))
+            if not mujoco_node.ready_sent:
+                mujoco_node.publisher_state_ready.publish(Bool(data=True))
+                mujoco_node.ready_sent = True
 
             while rclpy.ok() and viewer.is_running():
                 rclpy.spin_once(mujoco_node, timeout_sec=0.0)

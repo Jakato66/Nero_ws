@@ -1,3 +1,6 @@
+import os
+from glob import glob
+
 from setuptools import setup
 
 package_name = 'ros2_to_mujoco_nero'
@@ -14,6 +17,10 @@ setup(
         (
             'share/' + package_name,
             ['package.xml'],
+        ),
+        (
+            os.path.join('share', package_name, 'launch'),
+            glob('launch/*.launch.py'),
         ),
     ],
     install_requires=['setuptools'],

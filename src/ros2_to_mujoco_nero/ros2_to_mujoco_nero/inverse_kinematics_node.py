@@ -39,19 +39,31 @@ class InverseKinematicsNode(Node):
         self.jacp2 = None
         self.jacr2 = None
         self.jacobian = None
+        self.ready_sent = False
         
         #publishers
         self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
         self.publisher_result = self.create_publisher(Float64MultiArray, '/inverse_kinematics_result', 10)
         
         #subscriptions
-        self.subscription = self.create_subscription(Bool, 'start_running_nodes', self.start_running_nodes_callback, 10)
+        self.subscription = self.create_subscription(
+            Bool,
+            'start_running_nodes',
+            self.start_running_nodes_callback,
+            latch_qos,
+        )
         self.state_subscription = self.create_subscription(Float64MultiArray, 'init_state_robot', self.state_callback, 10)
         self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
-        self.get_model_path_subscription = self.create_subscription(String, '/model_path', self.get_model_callback, 10)
+        model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.get_model_path_subscription = self.create_subscription(
+            String,
+            '/model_path',
+            self.get_model_callback,
+            model_path_qos,
+        )
     
     def start_running_nodes_callback(self, msg):
-        if msg.data:
+        if msg.data and not self.ready_sent:
             self.get_logger().info('Starting Inverse Kinematics Node.')
             # command for test
             command = Float64MultiArray()
@@ -59,6 +71,7 @@ class InverseKinematicsNode(Node):
             self.publisher_result.publish(command)
             
             self.publisher_state.publish(Bool(data=True))
+            self.ready_sent = True
             
             
     # The information about the initial state en velocity should be received from the main node or the controller node
@@ -129,3 +142,8 @@ if __name__ == '__main__':
     
 # Este nodo debe usar el reloj de la simulacion, con el siguiente parametro
 #ros2 run ros2_to_mujoco_nero inverse_kinematics_node --ros-args -p use_sim_time:=true
+
+# to test the comunication only with mujoco node use the following command
+"""ros2 topic pub --once /inverse_kinematics_result \
+  std_msgs/msg/Float64MultiArray \
+  "{data: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}"""
