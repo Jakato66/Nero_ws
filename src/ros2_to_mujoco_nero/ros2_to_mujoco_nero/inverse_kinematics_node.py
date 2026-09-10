@@ -33,6 +33,8 @@ class InverseKinematicsNode(Node):
         self.ee_site_ids = None
         self.jacp = None 
         self.jacr = None
+        self.jacp2 = None
+        self.jacr2 = None
         self.jacobian = None
         
         #publishers
@@ -79,6 +81,11 @@ class InverseKinematicsNode(Node):
                 self.model.site(i).name: self.model.site(i).id 
                 for i in range(self.model.nsite) if self.model.site(i).name
                                }
+            # assign jacobian matrices
+            self.jacp = np.zeros((3, self.model.nv))
+            self.jacr = np.zeros((3, self.model.nv))
+            self.jacp2 = np.zeros((3, self.model.nv))
+            self.jacr2 = np.zeros((3, self.model.nv))
             self.get_logger().info('Model data assigned successfully.')
 
         else:
