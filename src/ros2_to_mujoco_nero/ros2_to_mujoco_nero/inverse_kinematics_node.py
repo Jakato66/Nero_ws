@@ -41,11 +41,11 @@ class InverseKinematicsNode(Node):
         self.ready_sent = False
         self.obj_point = None
         self.delayed_result_timer = None
-        
+
         #publishers
         self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
         self.publisher_result = self.create_publisher(Float64MultiArray, '/inverse_kinematics_result', 10)
-        
+
         #subscriptions
         self.subscription = self.create_subscription(
             Bool,
@@ -55,60 +55,49 @@ class InverseKinematicsNode(Node):
         )
         self.state_subscription = self.create_subscription(Float64MultiArray, 'init_state_robot', self.state_callback, 10)
         self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
-        self.obj_point_subscription = self.create_subscription(Float64MultiArray, '/obj_point', self.obj_point_callback, 10)
-        
+        self.obj_point_subscription = self.create_subscription(Float64MultiArray, '/obj_point', self.obj_point_callback, latch_qos)
+
         self.get_model_path_subscription = self.create_subscription(
             String,
             '/model_path',
             self.get_model_callback,
             model_path_qos,
         )
-    
+    def obj_point_callback(self, msg):
+        self.get_logger().info(f"Received object point: {msg.data}")
+        self.obj_point = np.array(msg.data)
+        if self.model is not None and self.robot_data is not None:
+            self.calculate_inverse_kinematics(self.obj_point)
+
     def start_running_nodes_callback(self, msg):
         if msg.data and not self.ready_sent:
             self.get_logger().info('Starting Inverse Kinematics Node.')
             # command for test
             command = Float64MultiArray()
-            command.data = [0.0] * 7
+            command.data = [0.0, 0.2, 0.0, 1.5, 0.0, -0.8, 0.0, 0.0] # initial pose
             self.publisher_result.publish(command)
-            
+
             self.publisher_state.publish(Bool(data=True))
             self.ready_sent = True
-            
-            
+
     # The information about the initial state en velocity should be received from the main node or the controller node
     # at de beginning of the simulation or the system.
-    
+
     def state_callback(self, msg):
         if msg.data:
             self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
             # Here you can add logic to handle the robot's initial state if needed
-            self.init_q = np.array(msg.data) 
-            
+            self.init_q = np.array(msg.data)
+
     def init_vel_callback(self, msg):
         if msg.data:
             self.get_logger().info('Robot initial velocity received.')
             # Here you can add logic to handle the robot's initial velocity if needed
             self.init_vel = np.array(msg.data)
-    
+
     def calculate_inverse_kinematics(self, target_position):
-        test_msg = Float64MultiArray()
-        test_msg.data = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
-        self.publisher_result.publish(test_msg)
-
-        # Publish the second message one second after the first one.
-        self.delayed_result_timer = self.create_timer(
-            1.0, self.publish_delayed_result
-        )
-
-    def publish_delayed_result(self):
-        if self.delayed_result_timer is not None:
-            self.delayed_result_timer.cancel()
-            self.delayed_result_timer = None
-
-        test_msg = Float64MultiArray()
-        test_msg.data = [0.2, 0.5, 0.6, 0.1, 0.2, 0.7, 0.8]
-        self.publisher_result.publish(test_msg)
+        self.get_logger().info(f"Calculating inverse kinematics for target position: {target_position}")
+        pass
 
     def assign_model_data(self, init_q, init_vel):
         if self.model is not None and self.robot_data is not None:
@@ -122,7 +111,7 @@ class InverseKinematicsNode(Node):
                 self.model.site(i).name: self.model.site(i).id
                 for i in range(self.model.nsite) if self.model.site(i).name
                                }
-            # assign jacobian matrices
+            # assign jacobian matrixes
             self.jacp = np.zeros((3, self.model.nv))
             self.jacr = np.zeros((3, self.model.nv))
             self.jacp2 = np.zeros((3, self.model.nv))
@@ -131,8 +120,7 @@ class InverseKinematicsNode(Node):
 
         else:
             self.get_logger().error('Model or robot data is not initialized. Cannot assign data.')
-       
-        
+
     def get_model_callback(self, msg):
         if msg.data:
             self.model_path = msg.data

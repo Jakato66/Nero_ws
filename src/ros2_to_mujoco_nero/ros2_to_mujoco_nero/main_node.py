@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import rclpy
 import os
+import numpy as np
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
-from std_msgs.msg import String, Bool, Int8
+from std_msgs.msg import String, Bool, Int8, Float64MultiArray
+from geometry_msgs.msg import Pose
 """This node has to be started after the ros2_to_mujoco_nero package has been 
 launched. It will start the main loop of the simulation and will also ensure 
 that all the nodes ar up and running"""
@@ -18,6 +20,7 @@ class MainNode(Node):
         self.start_sent = False
         self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
         model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        input_obj_qos = QoSProfile(depth=10)
         
         # publishers
         self.publisher = self.create_publisher(
@@ -30,6 +33,7 @@ class MainNode(Node):
             '/model_path',
             model_path_qos,
         )
+        self.publisher_obj_position = self.create_publisher(Float64MultiArray, '/obj_point', model_path_qos)
 
         model_path_msg = String()
         model_path_msg.data = self.model_path
@@ -44,6 +48,8 @@ class MainNode(Node):
         self.subscription = self.create_subscription(Bool, 'interface_ready', self.interface_ready_callback, model_path_qos)
         self.subscription = self.create_subscription(Bool, 'controler_ready', self.controller_ready_callback, model_path_qos)
         self.subscription = self.create_subscription(Bool, 'intermediary_ready', self.intermediary_ready_callback, model_path_qos)
+        
+        self.subscription = self.create_subscription(Float64MultiArray, 'input_obj_position', self.input_obj_position_callback, input_obj_qos)
         
     # callbacks
     def publish_start_once(self):
@@ -70,7 +76,12 @@ class MainNode(Node):
     def intermediary_ready_callback(self, msg):
         if msg.data:
             self.get_logger().info('Intermediary is ready.')
-            
+
+    def input_obj_position_callback(self, msg):
+        self.get_logger().info(f"Received input object position: {msg.data}")
+        self.publisher_obj_position.publish(msg)
+        # [x, y, z, roll, pitch, yaw]
+
             
 def main(args=None):
     rclpy.init(args=args)
