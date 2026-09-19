@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+import rclpy
+import os
+import sys
+import threading
+import mujoco
+import numpy as np
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
+from std_msgs.msg import String, Bool, Float64MultiArray
+from sensor_msgs.msg import JointState
+from rosgraph_msgs.msg import Clock
+
+
+"""This nodes handle the inverse kinematics calculation and send the reasult to
+the controller node and then to the indermediary node"""
+
+class InverseKinematicsNode(Node):
+    def __init__(self):
+        super().__init__('inverse_kinematics_node')
+        self.get_logger().info('Inverse Kinematics Node has been started.')
+        
+        # QoS profile 
+        latch_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        
+        # atributes 
+        self.timer_pr = 0.01 # 100Hz
+        self.init_q = None
+        self.init_vel = None
+        self.current_q = None
+        self.model_path = None
+        self.robot_data = None
+        self.model = None
+        self.current_q = None
+        self.body_ids = None
+        self.ee_site_ids = None
+        self.jacp = None 
+        self.jacr = None
+        self.jacp2 = None
+        self.jacr2 = None
+        self.jacobian = None
+        self.ready_sent = False
+        self.obj_point = None
+        self.delayed_result_timer = None
+
+        #publishers
+        self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
+        self.publisher_result = self.create_publisher(Float64MultiArray, '/inverse_kinematics_result', 10)
+
+        #subscriptions
+        self.subscription = self.create_subscription(
+            Bool,
+            'start_running_nodes',
+            self.start_running_nodes_callback,
+            latch_qos,
+        )
+        self.state_subscription = self.create_subscription(Float64MultiArray, 'init_state_robot', self.state_callback, 10)
+        self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
+        self.obj_point_subscription = self.create_subscription(Float64MultiArray, '/obj_point', self.obj_point_callback, latch_qos)
+
+        self.joint_state_subscription = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, latch_qos)
+
+        self.get_model_path_subscription = self.create_subscription(
+            String,
+            '/model_path',
+            self.get_model_callback,
+            model_path_qos,
+        )
+    def obj_point_callback(self, msg):
+        self.get_logger().info(f"Received object point: {msg.data}")
+        self.obj_point = np.array(msg.data)
+        if self.model is not None and self.robot_data is not None:
+            self.calculate_inverse_kinematics(self.obj_point)
+
+    def start_running_nodes_callback(self, msg):
+        if msg.data and not self.ready_sent:
+            self.get_logger().info('Starting Inverse Kinematics Node.')
+            # command for test
+            command = Float64MultiArray()
+            command.data = [0.0, 0.2, 0.0, 1.5, 0.0, -0.8, 0.0, 0.0] # initial pose
+            self.publisher_result.publish(command)
+
+            self.publisher_state.publish(Bool(data=True))
+            self.ready_sent = True
+
+    # The information about the initial state en velocity should be received from the main node or the controller node
+    # at de beginning of the simulation or the system.
+    # init functions
+    def state_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
+            # Here you can add logic to handle the robot's initial state if needed
+            self.init_q = np.array(msg.data)
+
+    def init_vel_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Robot initial velocity received.')
+            # Here you can add logic to handle the robot's initial velocity if needed
+            self.init_vel = np.array(msg.data)
+
+    # Math functions
+    def calculate_inverse_kinematics(self, target_position):
+        self.get_logger().info(f"Calculating inverse kinematics for target position: {target_position}")
+
+        # Get the target position and orientation
+        target_pos = target_position[:3]
+        target_R = self.rpy_to_rotation_matrix(target_position[3:6])
+        if self.current_q is not None:
+            q_copy = np.copy(self.current_q)
+        ee_id = self.ee_site_ids['pinch_site']
+
+        # usint=g Newton Raphson method
+        max_iter = 200
+        tolerance = 1e-4
+        alpha = 0.5
+        for i in range(max_iter):
+            self.robot_data.qpos[:] = q_copy
+            mujoco.mj_forward(self.model, self.robot_data)
+
+            current_pos = self.robot_data.site_xpos[ee_id]
+            current_R = self.robot_data.site_xmat[ee_id].reshape(3, 3)
+
+            # Calculate error
+            e_v = target_pos - current_pos
+            R_err = target_R @ current_R.T
+            e_omega = np.array([
+                R_err[2, 1] - R_err[1, 2],
+                R_err[0, 2] - R_err[2, 0],
+                R_err[1, 0] - R_err[0, 1]
+            ]) / 2.0
+            space_error = np.concatenate((e_v, e_omega))
+
+            # end condition
+            if np.linalg.norm(space_error) < tolerance:
+                self.get_logger().info(f"Inverse kinematics converged in {i} iterations.")
+                break
+
+            # Calculate Jacobian
+            mujoco.mj_jacSite(self.model, self.robot_data, self.jacp, self.jacr, ee_id)
+            J = np.vstack((self.jacp, self.jacr))
+            J_pseudo_inv = np.linalg.pinv(J)
+            delta_q = J_pseudo_inv @ space_error
+            q_copy += (delta_q[:self.model.nq] * alpha)
+        self.robot_data.qpos[:self.model.nq] = self.current_q
+        mujoco.mj_forward(self.model, self.robot_data)
+
+        #publish the result
+        result_msg = Float64MultiArray()
+        result_msg.data = q_copy.tolist()
+        self.publisher_result.publish(result_msg)
+        self.get_logger().info(f"Published inverse kinematics result: {result_msg.data}")
+
+    def rpy_to_rotation_matrix(self, rpy):
+        roll, pitch, yaw = rpy
+        cr, sr = np.cos(roll), np.sin(roll)
+        cp, sp = np.cos(pitch), np.sin(pitch)
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        Rx = np.array([[1, 0, 0],
+                       [0, cr, -sr],
+                       [0, sr, cr]])
+        Ry = np.array([[cp, 0, sp],
+                       [0, 1, 0],
+                       [-sp, 0, cp]])
+        Rz = np.array([[cy, -sy, 0],
+                       [sy, cy, 0],
+                       [0, 0, 1]])
+        R = Rz @ Ry @ Rx
+        return R
+
+    # Model Functions
+    def assign_model_data(self, init_q, init_vel):
+        if self.model is not None and self.robot_data is not None:
+            self.robot_data.qpos[:] = init_q
+            self.robot_data.qvel[:] = init_vel
+            self.body_ids = {
+                self.model.body(i).name: self.model.body(i).id
+                for i in range(self.model.nbody) if self.model.body(i).name
+                            }
+            self.ee_site_ids = {
+                self.model.site(i).name: self.model.site(i).id
+                for i in range(self.model.nsite) if self.model.site(i).name
+                               }
+            # assign jacobian matrixes
+            self.jacp = np.zeros((3, self.model.nv))
+            self.jacr = np.zeros((3, self.model.nv))
+            self.jacp2 = np.zeros((3, self.model.nv))
+            self.jacr2 = np.zeros((3, self.model.nv))
+            self.get_logger().info('Model data assigned successfully.')
+
+        else:
+            self.get_logger().error('Model or robot data is not initialized. Cannot assign data.')
+
+    def get_model_callback(self, msg):
+        if msg.data:
+            self.model_path = msg.data
+            self.model = mujoco.MjModel.from_xml_path(self.model_path)
+            self.robot_data = mujoco.MjData(self.model)
+            self.get_logger().info(f'Model path received: {self.model_path}')
+            # Eventually, this can be change by a parameter upload at the launch moment.
+            # Here you can add logic to load the model if needed
+            self.assign_model_data(self.init_q, self.init_vel)
+
+    def joint_state_callback(self, msg):
+        self.get_logger().info(f"Received joint state: {msg.position}")
+
+        # extract the joint positions from the message and store them in current_q
+        self.current_q = np.array(msg.position)
+        # update robot data
+        if self.robot_data is not None:
+            self.robot_data.qpos[:len(self.current_q)] = self.current_q
+            if len(msg.velocity) > 0: # add velocity if available
+                self.robot_data.qvel[:len(msg.velocity)] = np.array(msg.velocity)
+            # Calculate direct kinematics and center of mass
+            mujoco.mj_forward(self.model, self.robot_data)
+    
+    
+def main(args=None):
+    rclpy.init(args=args)
+    inverse_kinematics_node = InverseKinematicsNode()
+    try:
+        rclpy.spin(inverse_kinematics_node)
+    except KeyboardInterrupt:
+        pass
+    inverse_kinematics_node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+    
+# Este nodo debe usar el reloj de la simulacion, con el siguiente parametro
+#ros2 run ros2_to_mujoco_nero inverse_kinematics_node --ros-args -p use_sim_time:=true
+
+# to test the comunication only with mujoco node use the following command
+"""ros2 topic pub --once /inverse_kinematics_result \
+  std_msgs/msg/Float64MultiArray \
+  "{data: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}"""
