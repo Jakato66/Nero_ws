@@ -37,9 +37,6 @@ class InverseKinematicsNode(Node):
         self.ee_site_ids = None
         self.jacp = None 
         self.jacr = None
-        self.jacp2 = None
-        self.jacr2 = None
-        self.jacobian = None
         self.ready_sent = False
         self.obj_point = None
         self.delayed_result_timer = None
@@ -78,7 +75,7 @@ class InverseKinematicsNode(Node):
             self.get_logger().info('Starting Inverse Kinematics Node.')
             # command for test
             command = Float64MultiArray()
-            command.data = [0.0, 0.2, 0.0, 1.5, 0.0, -0.8, 0.0, 0.0] # initial pose
+            command.data = [0.0, 0.5, 0.0, -1.0, 0.0, 0.9, 0.0, 0.0] # initial pose
             self.publisher_result.publish(command)
 
             self.publisher_state.publish(Bool(data=True))
@@ -108,21 +105,33 @@ class InverseKinematicsNode(Node):
         if self.ee_site_ids is None or 'pinch_site' not in self.ee_site_ids:
             self.get_logger().error("End-effector site ID for 'pinch_site' is not available. Cannot perform inverse kinematics.")
             return
+        if self.jacp is None or self.jacr is None:
+            self.get_logger().error("Jacobian matrices are not initialized. Cannot perform inverse kinematics.")
+            return
 
         # Get the target position and orientation
         target_pos = target_position[:3]
         target_R = self.rpy_to_rotation_matrix(target_position[3:6])
-        if self.current_q is not None:
-            q_copy = np.copy(self.current_q)
+        arm_dof_count = min(len(self.current_q), 7, self.model.nv)
+
+        q_copy = np.copy(self.robot_data.qpos[:])
+        q_copy[:arm_dof_count] = self.current_q[:arm_dof_count]
+        q_copy[7:] = np.nan_to_num(q_copy[7:], nan=0.0, posinf=0.0, neginf=0.0)
         ee_id = self.ee_site_ids['pinch_site']
 
-        # usint=g Newton Raphson method
-        max_iter = 200
+        # using Newton Raphson method
+        max_iter = 400
         tolerance = 1e-4
         alpha = 0.5
         converged = False
+
+        max_step_cartesian = 0.05
+        max_step_joint = 0.1
+
+        arm_joint_ranges = self.model.jnt_range[:arm_dof_count]
+
         for i in range(max_iter):
-            self.robot_data.qpos[:self.model.nq] = q_copy
+            self.robot_data.qpos[:] = q_copy
             mujoco.mj_forward(self.model, self.robot_data)
 
             current_pos = self.robot_data.site_xpos[ee_id]
@@ -131,32 +140,91 @@ class InverseKinematicsNode(Node):
             # Calculate error
             e_v = target_pos - current_pos
             R_err = target_R @ current_R.T
-            e_omega = np.array([
-                R_err[2, 1] - R_err[1, 2],
-                R_err[0, 2] - R_err[2, 0],
-                R_err[1, 0] - R_err[0, 1]
-            ]) / 2.0
-            space_error = np.concatenate((e_v, e_omega))
+            angle = np.arccos(np.clip((np.trace(R_err) - 1) / 2.0, -1.0, 1.0)) #help of gemini :)
+            if angle > 1e-6:
+                axis = np.array([
+                    R_err[2, 1] - R_err[1, 2],
+                    R_err[0, 2] - R_err[2, 0],
+                    R_err[1, 0] - R_err[0, 1]
+                ])
+                norm_axis = np.linalg.norm(axis)
+                axis = axis / norm_axis if norm_axis > 1e-6 else np.array([0.0, 0.0, 1.0])
+                e_omega = axis * angle
+            else:
+                e_omega = np.zeros(3)
+
+            space_error = np.concatenate((e_v, e_omega)) # Twist
 
             # end condition
             if np.linalg.norm(space_error) < tolerance:
+                converged = True
                 self.get_logger().info(f"Inverse kinematics converged in {i} iterations.")
                 break
+            # limit error to avoid large jumps
+            if np.linalg.norm(space_error) > max_step_cartesian:
+                space_error = (space_error / np.linalg.norm(space_error)) * max_step_cartesian
 
             # Calculate Jacobian
             mujoco.mj_jacSite(self.model, self.robot_data, self.jacp, self.jacr, ee_id)
-            J = np.vstack((self.jacp, self.jacr))
+            J = np.vstack((self.jacp, self.jacr))[:, :arm_dof_count]
+
+            #NaN verification
+            if not np.all(np.isfinite(J)):
+                self.get_logger().error("Jacobian contains NaN or Inf values. IK result discarded.")
+                return
+
             J_pseudo_inv = np.linalg.pinv(J)
             delta_q = J_pseudo_inv @ space_error
-            q_copy += (delta_q[:self.model.nq] * alpha)
+
+            # singularity protection
+            norm_delta_q = np.linalg.norm(delta_q)
+            if norm_delta_q > max_step_joint:
+                delta_q = (delta_q / norm_delta_q) * max_step_joint
+
+            q_copy[:arm_dof_count] += delta_q * alpha
+            q_copy[:arm_dof_count] = np.clip(
+                q_copy[:arm_dof_count],
+                arm_joint_ranges[:, 0],
+                arm_joint_ranges[:, 1],
+            )
+
+            if not np.all(np.isfinite(q_copy)):
+                self.get_logger().error("IK produced a non-finite joint position; command was discarded.")
+                return
+
+        self.robot_data.qpos[:] = q_copy
+        mujoco.mj_forward(self.model, self.robot_data)
+        final_position_error = np.linalg.norm(
+            target_pos - self.robot_data.site_xpos[ee_id]
+        )
+        final_rotation = self.robot_data.site_xmat[ee_id].reshape(3, 3)
+        final_rotation_error = target_R @ final_rotation.T
+        final_angle_error = np.arccos(np.clip(
+            (np.trace(final_rotation_error) - 1.0) / 2.0,
+            -1.0,
+            1.0,
+        ))
         if not converged:
-            self.get_logger().warn("Inverse kinematics did not converge within the maximum number of iterations.")
-        self.robot_data.qpos[:self.model.nq] = self.current_q
+            self.get_logger().warn(
+                "Inverse kinematics did not converge: "
+                f"position error={final_position_error:.4f} m, "
+                f"orientation error={final_angle_error:.4f} rad."
+            )
+            self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
+            mujoco.mj_forward(self.model, self.robot_data)
+            return
+
+        self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
         mujoco.mj_forward(self.model, self.robot_data)
 
         #publish the result
+        command = np.concatenate((q_copy[:7], [q_copy[7]]))
+        if not np.all(np.isfinite(command)):
+            self.get_logger().error("IK result is invalid and will not be published.")
+            return
+
         result_msg = Float64MultiArray()
-        result_msg.data = q_copy.tolist()
+        result_msg.data = command.tolist()
         self.publisher_result.publish(result_msg)
         self.get_logger().info(f"Published inverse kinematics result: {result_msg.data}")
 
@@ -193,8 +261,6 @@ class InverseKinematicsNode(Node):
             # assign jacobian matrixes
             self.jacp = np.zeros((3, self.model.nv))
             self.jacr = np.zeros((3, self.model.nv))
-            self.jacp2 = np.zeros((3, self.model.nv))
-            self.jacr2 = np.zeros((3, self.model.nv))
             self.get_logger().info('Model data assigned successfully.')
 
         else:
@@ -211,7 +277,7 @@ class InverseKinematicsNode(Node):
             self.assign_model_data(self.init_q, self.init_vel)
 
     def joint_state_callback(self, msg):
-        self.get_logger().info(f"Received joint state: {msg.position}")
+        # self.get_logger().info(f"Received joint state: {msg.position}")
 
         # extract the joint positions from the message and store them in current_q
         self.current_q = np.array(msg.position)

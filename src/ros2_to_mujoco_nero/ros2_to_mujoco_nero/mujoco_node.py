@@ -5,6 +5,7 @@ import os
 import time
 import mujoco
 import mujoco.viewer
+import numpy as np
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
@@ -47,7 +48,11 @@ class MujocoNode(Node):
     def inverse_kinematics_result_callback(self, msg):
         # get the data form the msg
         self.get_logger().info(f"Received inverse kinematics result: {msg.data}")
-        self.last_command = msg.data
+        command = np.asarray(msg.data, dtype=float)
+        if command.shape != (8,) or not np.all(np.isfinite(command)):
+            self.get_logger().error('Ignoring invalid IK command; expected 8 finite actuator positions.')
+            return
+        self.last_command = command
         
         
     def start_running_nodes_callback(self, msg):
