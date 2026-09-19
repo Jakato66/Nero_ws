@@ -14,7 +14,7 @@ from sensor_msgs.msg import JointState
 from rosgraph_msgs.msg import Clock
 
 
-"""This nodes handle the inverse kinematics calculation and send the reasult to 
+"""This nodes handle the inverse kinematics calculation and send the reasult to
 the controller node and then to the indermediary node"""
 
 class InverseKinematicsNode(Node):
@@ -24,6 +24,7 @@ class InverseKinematicsNode(Node):
         
         # QoS profile 
         latch_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         
         # atributes 
         self.timer_pr = 0.01 # 100Hz
@@ -40,6 +41,8 @@ class InverseKinematicsNode(Node):
         self.jacr2 = None
         self.jacobian = None
         self.ready_sent = False
+        self.obj_point = None
+        self.delayed_result_timer = None
         
         #publishers
         self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
@@ -54,7 +57,8 @@ class InverseKinematicsNode(Node):
         )
         self.state_subscription = self.create_subscription(Float64MultiArray, 'init_state_robot', self.state_callback, 10)
         self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
-        model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.obj_point_subscription = self.create_subscription(Float64MultiArray, '/obj_point', self.obj_point_callback, 10)
+        
         self.get_model_path_subscription = self.create_subscription(
             String,
             '/model_path',
@@ -90,19 +94,34 @@ class InverseKinematicsNode(Node):
             self.init_vel = np.array(msg.data)
     
     def calculate_inverse_kinematics(self, target_position):
-        pass
-    
-    
+        test_msg = Float64MultiArray()
+        test_msg.data = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        self.publisher_result.publish(test_msg)
+
+        # Publish the second message one second after the first one.
+        self.delayed_result_timer = self.create_timer(
+            1.0, self.publish_delayed_result
+        )
+
+    def publish_delayed_result(self):
+        if self.delayed_result_timer is not None:
+            self.delayed_result_timer.cancel()
+            self.delayed_result_timer = None
+
+        test_msg = Float64MultiArray()
+        test_msg.data = [0.2, 0.5, 0.6, 0.1, 0.2, 0.7, 0.8]
+        self.publisher_result.publish(test_msg)
+
     def assign_model_data(self, init_q, init_vel):
         if self.model is not None and self.robot_data is not None:
             self.robot_data.qpos[:] = init_q
             self.robot_data.qvel[:] = init_vel
             self.body_ids = {
-                self.model.body(i).name: self.model.body(i).id 
+                self.model.body(i).name: self.model.body(i).id
                 for i in range(self.model.nbody) if self.model.body(i).name
                             }
             self.ee_site_ids = {
-                self.model.site(i).name: self.model.site(i).id 
+                self.model.site(i).name: self.model.site(i).id
                 for i in range(self.model.nsite) if self.model.site(i).name
                                }
             # assign jacobian matrices
