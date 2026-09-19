@@ -86,6 +86,7 @@
                     <geom pos="0.032 0 -0.0235" quat="0.499998 -0.5 0.500002 -0.5" type="mesh" mesh="gripper_flange"/>
                     <geom pos="0.0375 -2.02026e-08 -0.0235" quat="0.499998 -0.5 0.500002 -0.5" type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="gripper_base"/>
                     <geom pos="0.0375 -2.02026e-08 -0.0235" quat="0.499998 -0.5 0.500002 -0.5" type="mesh" mesh="gripper_base"/>
+                    <site name="pinch_site" pos="0.1733 0 -0.0235" size="0.01" rgba="1 0 0 1"/>
                     <body name="gripper_link1" pos="0.1733 -5.19024e-07 -0.0235005" quat="-1.27026e-06 0.707108 0.707105 -1.30815e-06">
                       <inertial pos="0.000651232 -0.049193 0.00972259" quat="0.477798 0.572974 -0.518028 0.418398" mass="0.025" diaginertia="7.74531e-05 7.36783e-05 5.0886e-06"/>
                       <joint name="gripper_joint1" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.05" actuatorfrcrange="-10 10"/>
