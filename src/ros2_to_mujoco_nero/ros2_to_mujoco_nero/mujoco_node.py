@@ -46,6 +46,7 @@ class MujocoNode(Node):
     
     def inverse_kinematics_result_callback(self, msg):
         # get the data form the msg
+        self.get_logger().info(f"Received inverse kinematics result: {msg.data}")
         self.last_command = msg.data
         
         

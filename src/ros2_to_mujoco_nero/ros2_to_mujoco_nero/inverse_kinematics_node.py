@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from click import command
-
 import rclpy
 import os
 import sys
