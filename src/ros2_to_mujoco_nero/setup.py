@@ -30,6 +30,7 @@ setup(
             'mujoco_node = ros2_to_mujoco_nero.mujoco_node:main',
             'main_node = ros2_to_mujoco_nero.main_node:main',
             'inverse_kinematics_node = ros2_to_mujoco_nero.inverse_kinematics_node:main',
+            'inverse_kinematics_body_jacobian_node = ros2_to_mujoco_nero.inverse_kinematics_body_jacobian_node:main',
         ],
     },
 )
