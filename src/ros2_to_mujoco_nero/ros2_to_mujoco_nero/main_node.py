@@ -44,12 +44,12 @@ class MainNode(Node):
         self.start_timer = self.create_timer(0.5, self.publish_start_once)
 
         #subscriptions
-        self.subscription = self.create_subscription(Bool, 'mujoco_ready', self.mujoco_ready_callback, model_path_qos)
-        self.subscription = self.create_subscription(Bool, 'interface_ready', self.interface_ready_callback, model_path_qos)
-        self.subscription = self.create_subscription(Bool, 'controler_ready', self.controller_ready_callback, model_path_qos)
-        self.subscription = self.create_subscription(Bool, 'intermediary_ready', self.intermediary_ready_callback, model_path_qos)
+        self.subscription_mujoco = self.create_subscription(Bool, 'mujoco_ready', self.mujoco_ready_callback, model_path_qos)
+        self.subscription_interface = self.create_subscription(Bool, 'interface_ready', self.interface_ready_callback, model_path_qos)
+        self.subscription_generator = self.create_subscription(Bool, 'generator_ready', self.controller_ready_callback, model_path_qos)
+        self.subscription_intermediary = self.create_subscription(Bool, 'intermediary_ready', self.intermediary_ready_callback, model_path_qos)
         
-        self.subscription = self.create_subscription(Float64MultiArray, 'input_obj_position', self.input_obj_position_callback, input_obj_qos)
+        self.subscription_obj_position = self.create_subscription(Float64MultiArray, 'input_obj_position', self.input_obj_position_callback, input_obj_qos)
         
     # callbacks
     def publish_start_once(self):
