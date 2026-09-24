@@ -20,14 +20,14 @@ class GeneratorNode(Node):
 
         #atributes
         self.is_ready = False
-        self.timer_pr = 0.05
+        self.timer_pr = 0.01
         self.timer = self.create_timer(self.timer_pr, self.generate_callback)
         self.t0 = time.time()
-        self.x_center = 0.35
-        self.y_center = 0.0
-        self.z_center = 0.45
+        self.x_center = 0.2
+        self.y_center = 0.2
+        self.z_center = 0.3
         self.roll = 0.0
-        self.pitch = 1.57
+        self.pitch = 0.0 #1.57
         self.yaw = 0.0
         self.amplitude = 0.1
         self.freq = 0.5

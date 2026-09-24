@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 import rclpy
 import os
 import sys
@@ -11,7 +10,6 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
 from sensor_msgs.msg import JointState
 from rosgraph_msgs.msg import Clock
-
 
 """This nodes handle the inverse kinematics calculation and send the reasult to
 the controller node and then to the indermediary node"""
@@ -123,7 +121,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
         # using Newton Raphson method
         max_iter = 400
         tolerance = 1e-4
-        alpha = 0.5
+        alpha = 0.2 # 0.5
         converged = False
 
         max_step_cartesian = 0.05

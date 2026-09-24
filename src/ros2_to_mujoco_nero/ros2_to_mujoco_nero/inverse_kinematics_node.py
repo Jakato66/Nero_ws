@@ -192,41 +192,41 @@ class InverseKinematicsNode(Node):
                 self.get_logger().error("IK produced a non-finite joint position; command was discarded.")
                 return
 
-        self.robot_data.qpos[:] = q_copy
-        mujoco.mj_forward(self.model, self.robot_data)
-        final_position_error = np.linalg.norm(
-            target_pos - self.robot_data.site_xpos[ee_id]
-        )
-        final_rotation = self.robot_data.site_xmat[ee_id].reshape(3, 3)
-        final_rotation_error = target_R @ final_rotation.T
-        final_angle_error = np.arccos(np.clip(
-            (np.trace(final_rotation_error) - 1.0) / 2.0,
-            -1.0,
-            1.0,
-        ))
-        if not converged:
-            self.get_logger().warn(
-                "Inverse kinematics did not converge: "
-                f"position error={final_position_error:.4f} m, "
-                f"orientation error={final_angle_error:.4f} rad."
+            self.robot_data.qpos[:] = q_copy
+            mujoco.mj_forward(self.model, self.robot_data)
+            final_position_error = np.linalg.norm(
+                target_pos - self.robot_data.site_xpos[ee_id]
             )
+            final_rotation = self.robot_data.site_xmat[ee_id].reshape(3, 3)
+            final_rotation_error = target_R @ final_rotation.T
+            final_angle_error = np.arccos(np.clip(
+                (np.trace(final_rotation_error) - 1.0) / 2.0,
+                -1.0,
+                1.0,
+            ))
+
             self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
             mujoco.mj_forward(self.model, self.robot_data)
-            return
 
-        self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
-        mujoco.mj_forward(self.model, self.robot_data)
+            #publish the result
+            command = np.concatenate((q_copy[:7], [q_copy[7]]))
+            if not np.all(np.isfinite(command)):
+                self.get_logger().error("IK result is invalid and will not be published.")
+                return
 
-        #publish the result
-        command = np.concatenate((q_copy[:7], [q_copy[7]]))
-        if not np.all(np.isfinite(command)):
-            self.get_logger().error("IK result is invalid and will not be published.")
-            return
-
-        result_msg = Float64MultiArray()
-        result_msg.data = command.tolist()
-        self.publisher_result.publish(result_msg)
-        self.get_logger().info(f"Published inverse kinematics result: {result_msg.data}")
+            result_msg = Float64MultiArray()
+            result_msg.data = command.tolist()
+            self.publisher_result.publish(result_msg)
+            self.get_logger().info(f"Published inverse kinematics result: {result_msg.data}")
+        # if not converged:
+        #     self.get_logger().warn(
+        #         "Inverse kinematics did not converge: "
+        #         f"position error={final_position_error:.4f} m, "
+        #         f"orientation error={final_angle_error:.4f} rad."
+        #     )
+        #     self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
+        #     mujoco.mj_forward(self.model, self.robot_data)
+        #     return
 
     def rpy_to_rotation_matrix(self, rpy):
         roll, pitch, yaw = rpy
