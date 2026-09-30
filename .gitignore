@@ -16,3 +16,6 @@ log/
 # pycache
 __pycache__/
 *.pyc
+
+# zips
+*.zip
