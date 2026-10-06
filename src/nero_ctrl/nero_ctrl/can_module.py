@@ -20,7 +20,6 @@ class CanModule(Node):
         # QoS settings
 
         # timers
-        self.timer = self.create_timer(2.0, self.timer_callback)
 
         # publishers
         self.joint_states_pub = self.create_publisher(JointState, 'control/joint_states', 10)
@@ -29,9 +28,11 @@ class CanModule(Node):
         self.move_l_pub = self.create_publisher(PoseStamped, "control/move_l", 10)
         self.move_c_pub = self.create_publisher(PoseArray, "control/move_c", 10)
         self.move_js_pub = self.create_publisher(JointState, "control/move_js", 10)
+        self.start_node_publisher = self.create_publisher(Bool, '/start_running_nodes', 10)
 
         # subscribers
-        self.test_pos_subscriber = self.create_subscription(Float64MultiArray, 'test_pos', self.test_pos_callback, 10)
+        self.create_subscription(Float64MultiArray, 'test_pos', self.test_pos_callback, 10)
+        self.create_subscription(Bool, 'start_running_nodes', self.start_node_callback, 10)
 
 
     def test_pos_callback(self, msg):
@@ -50,8 +51,12 @@ class CanModule(Node):
         self.move_j_pub.publish(msg)
         self.get_logger().info(f"Published joint states: {msg.position}")
 
-    def timer_callback(self):
-        pass
+    def start_node_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Starting CAN module.')
+            msg = Bool()
+            msg.data = True
+            self.start_node_publisher.publish(msg)
 
 
 def main(args=None):
