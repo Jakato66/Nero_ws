@@ -48,6 +48,7 @@ class MainNode(Node):
 
         self.subscription_controller = self.create_subscription(Bool, 'controller_ready', self.controller_ready_callback, model_path_qos)
 
+        #this topic is to receive the goal position
         self.subscription_obj_position = self.create_subscription(Float64MultiArray, 'input_obj_position', self.input_obj_position_callback, input_obj_qos)
 
         self.subscription_can = self.create_subscription(Bool, 'can_ready', self.can_ready_callback, model_path_qos)
@@ -70,6 +71,7 @@ class MainNode(Node):
     def controller_ready_callback(self, msg):
         if msg.data:
             self.get_logger().info('Controller is ready.')
+    
     def can_ready_callback(self, msg):
         if msg.data:
             self.get_logger().info('CAN is ready.')

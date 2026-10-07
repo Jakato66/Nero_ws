@@ -18,7 +18,7 @@ class CanModule(Node):
         self._joint_state = JointState()
         self.joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
         self.gripper_name = "gripper"
-        self.init_pose = []
+        self.init_pose = [0.0, -0.40, 0.0, 2.0, 0.0, 0.0, 0.0, 0.05]
 
         # QoS settings
 
@@ -65,6 +65,12 @@ class CanModule(Node):
             msg = Bool()
             msg.data = True
             self.start_node_publisher.publish(msg)
+            msg = JointState()
+            msg.name = self.joint_names + [self.gripper_name]
+            msg.position = self.init_pose
+            msg.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+            self.move_j_pub.publish(msg)
+            self.get_logger().info(f"Published initial joint states: {msg.position}")
 
 
 def main(args=None):

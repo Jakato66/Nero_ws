@@ -44,3 +44,12 @@ Half open: position: [0.05]
 Close: position: [0.0]
 Width range: 0.0 to 0.1 meters
 Force range: 0.5 to 3.0 N
+
+# Launch nero_can_ctrl
+```
+source /opt/ros/jazzy/setup.bash
+source ~/Projects/agx_arm_ws/install/setup.bash
+source ~/Projects/iPre_nero/install/setup.bash
+
+ros2 launch nero_ctrl nero_can_ctrl.launch.py
+```
