@@ -16,6 +16,9 @@ class CanModule(Node):
 
         # parameters
         self._joint_state = JointState()
+        self.joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
+        self.gripper_name = "gripper"
+        self.init_pose = []
 
         # QoS settings
 
@@ -39,15 +42,20 @@ class CanModule(Node):
         data = msg.data
         if data and data[0] == 1.0:
             self.get_logger().info("Test position 1 received.")
-            self._joint_state.name = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-            self._joint_state.position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self._joint_state.name = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7", "gripper"]
+            self._joint_state.position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
         else:
             self.get_logger().info("Test position 2 received.")
-            self._joint_state.name = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-            self._joint_state.position = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+            self._joint_state.name = ["joint1", "joint2", "joint3","joint4", "joint5", "joint6", "joint7", "gripper"]
+            self._joint_state.position = [0.5, 0.5, 0.5, 0.5, 10.0, 0.5, 0.5, 0.05]
+            effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
         msg = JointState()
         msg.name = self._joint_state.name
         msg.position = self._joint_state.position
+        msg.effort = effort
         self.move_j_pub.publish(msg)
         self.get_logger().info(f"Published joint states: {msg.position}")
 
