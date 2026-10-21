@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import can
 import rclpy
+import time
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
@@ -19,12 +20,16 @@ class CanModule(Node):
         self.joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
         self.gripper_name = "gripper"
         self.init_pose = [0.0, -0.40, 0.0, 2.0, 0.0, 0.0, 0.0, 0.05]
+        self.init_pose_sent = False
+
 
         # QoS settings
+        self.init_node_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
         # timers
 
         # publishers
+        self.init_state_joint_pub = self.create_publisher(JointState, 'control/move_j', self.init_node_qos)
         self.joint_states_pub = self.create_publisher(JointState, 'control/joint_states', 10)
         self.move_j_pub = self.create_publisher(JointState, "control/move_j", 10)
         self.move_p_pub = self.create_publisher(PoseStamped, "control/move_p", 10)
@@ -60,7 +65,8 @@ class CanModule(Node):
         self.get_logger().info(f"Published joint states: {msg.position}")
 
     def start_node_callback(self, msg):
-        if msg.data:
+        time.sleep(1)  # Wait for 1 second before publishing the initial joint states
+        if msg.data and self.init_pose_sent == False:
             self.get_logger().info('Starting CAN module.')
             msg = Bool()
             msg.data = True
@@ -69,8 +75,9 @@ class CanModule(Node):
             msg.name = self.joint_names + [self.gripper_name]
             msg.position = self.init_pose
             msg.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-            self.move_j_pub.publish(msg)
+            self.init_state_joint_pub.publish(msg)
             self.get_logger().info(f"Published initial joint states: {msg.position}")
+            self.init_pose_sent = True
 
 
 def main(args=None):
