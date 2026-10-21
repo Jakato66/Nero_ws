@@ -25,7 +25,7 @@ class CanModule(Node):
 
         # QoS settings
         self.init_node_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        ik_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        ik_qos = QoSProfile(depth=10, durability=DurabilityPolicy.VOLATILE)
         # timers
 
         # publishers
@@ -40,14 +40,16 @@ class CanModule(Node):
         # others publishers (can modify and use this)
         self.start_node_publisher = self.create_publisher(Bool, '/start_running_nodes', 10)
         
-        self.joint_state_publisher_for_ik = self.create_publisher(JointState, '/ik/joint_states', 1)
-        
-        self.init_pose_ready_publisher = self.create_publisher(JointState, '/init_pose_ready', 1)
+        self.joint_state_publisher_for_ik = self.create_publisher(
+            JointState,
+            '/ik/joint_states',
+            ik_qos,
+        )
         
         # subscribers
         self.create_subscription(Float64MultiArray, 'test_pos', self.test_pos_callback, 10)
         self.create_subscription(Bool, 'start_running_nodes', self.start_node_callback, 10)
-        self.create_subscription(JointState, 'feedback/joint_states', self.joint_states_callback, 1)
+        self.create_subscription(JointState, 'feedback/joint_states', self.joint_states_callback, ik_qos)
         self.create_subscription(JointState, 'ik/ik_result', self.ik_result_callback, ik_qos)
 
 

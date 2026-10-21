@@ -53,7 +53,8 @@ class InverseKinematicsNodeBodyJacobian(Node):
         self.publisher_state = self.create_publisher(Bool, 'inverse_kinematics_ready', latch_qos)
         self.publisher_result = self.create_publisher(JointState, 'ik/ik_result', latch_qos)
 
-        #subscriptions
+        ik_qos = QoSProfile(depth=10, durability=DurabilityPolicy.VOLATILE)
+
         self.subscription = self.create_subscription(
             Bool,
             'start_running_nodes',
@@ -61,7 +62,12 @@ class InverseKinematicsNodeBodyJacobian(Node):
             latch_qos,
         )
         
-        self.state_subscription = self.create_subscription(JointState, 'ik/joint_states', self.state_callback, latch_qos)
+        self.state_subscription = self.create_subscription(
+            JointState,
+            'ik/joint_states',
+            self.state_callback,
+            ik_qos,
+        )
 
         self.init_vel_subscription = self.create_subscription(Float64MultiArray, 'init_vel_robot', self.init_vel_callback, 10)
 
@@ -108,20 +114,23 @@ class InverseKinematicsNodeBodyJacobian(Node):
 
     # get initial pose when robot is ready
     def state_callback(self, msg):
-        if msg.data:
-            if not self.init_pos_get:
-                self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
-                self.init_q = np.array(msg.data)
-                self.init_pos_get = True
-            else:
-                self.current_q = np.array(msg.position)
-                # update robot data
-                if self.robot_data is not None:
-                    self.robot_data.qpos[:len(self.current_q)] = self.current_q
-                    if len(msg.velocity) > 0: # add velocity if available
-                        self.robot_data.qvel[:len(msg.velocity)] = np.array(msg.velocity)
-                    # Calculate direct kinematics and center of mass
-                    mujoco.mj_forward(self.model, self.robot_data)
+        if not msg.position:
+            return
+
+        self.current_q = np.array(msg.position, dtype=float)
+        if not self.init_pos_get:
+            self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
+            self.init_q = self.current_q.copy()
+            self.init_pos_get = True
+            self._try_assign_model_data()
+
+        if self.robot_data is not None:
+            qpos_count = min(len(self.current_q), self.model.nq)
+            self.robot_data.qpos[:qpos_count] = self.current_q[:qpos_count]
+            if msg.velocity:
+                qvel_count = min(len(msg.velocity), self.model.nv)
+                self.robot_data.qvel[:qvel_count] = np.array(msg.velocity[:qvel_count])
+            mujoco.mj_forward(self.model, self.robot_data)
 
     # if needed and the rest of code is correct, you can use this to modify velocity, in the beginning of the system this can only be set by launch file
     def init_vel_callback(self, msg):
@@ -308,10 +317,23 @@ class InverseKinematicsNodeBodyJacobian(Node):
         return adj
 
     # Model Functions
+    def _try_assign_model_data(self):
+        if self.model is None or self.robot_data is None or self.init_q is None:
+            return False
+
+        self.assign_model_data(self.init_q, self.init_vel)
+        return True
+
     def assign_model_data(self, init_q, init_vel):
         if self.model is not None and self.robot_data is not None:
-            self.robot_data.qpos[:] = init_q
-            self.robot_data.qvel[:] = init_vel
+            qpos = np.zeros(self.model.nq)
+            qpos[:min(len(init_q), self.model.nq)] = init_q[:self.model.nq]
+            qvel = np.zeros(self.model.nv)
+            if init_vel is not None:
+                qvel[:min(len(init_vel), self.model.nv)] = init_vel[:self.model.nv]
+
+            self.robot_data.qpos[:] = qpos
+            self.robot_data.qvel[:] = qvel
             self.body_ids = {
                 self.model.body(i).name: self.model.body(i).id
                 for i in range(self.model.nbody) if self.model.body(i).name
@@ -324,9 +346,11 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.jacp = np.zeros((3, self.model.nv))
             self.jacr = np.zeros((3, self.model.nv))
             self.get_logger().info('Model data assigned successfully.')
+            return True
 
         else:
             self.get_logger().error('Model or robot data is not initialized. Cannot assign data.')
+            return False
 
     def get_model_callback(self, msg):
         if msg.data:
@@ -334,9 +358,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.model = mujoco.MjModel.from_xml_path(self.model_path)
             self.robot_data = mujoco.MjData(self.model)
             self.get_logger().info(f'Model path received: {self.model_path}')
-            # Eventually, this can be change by a parameter upload at the launch moment.
-            # Here you can add logic to load the model if needed
-            self.assign_model_data(self.init_q, self.init_vel)
+            self._try_assign_model_data()
 
     # def joint_state_callback(self, msg):
     #     # self.get_logger().info(f"Received joint state: {msg.position}")
