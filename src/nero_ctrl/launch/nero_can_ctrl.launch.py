@@ -21,6 +21,7 @@ def generate_launch_description():
             "effector_type": "agx_gripper",
             "tcp_offset": "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
             "control_enabled": "true",
+            "speed_percent": "50",
         }.items(),
     )
 
