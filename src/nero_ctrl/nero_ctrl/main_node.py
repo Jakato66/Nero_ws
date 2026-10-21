@@ -47,7 +47,7 @@ class MainNode(Node):
         self.subscription_mujoco = self.create_subscription(Bool, 'mujoco_ready', self.mujoco_ready_callback, model_path_qos)
 
         self.subscription_controller = self.create_subscription(Bool, 'controller_ready', self.controller_ready_callback, model_path_qos)
-
+        self.subscription_ik = self.create_subscription(Bool, 'inverse_kinematics_ready', self.ik_ready_callback, model_path_qos)
         #this topic is to receive the goal position
         self.subscription_obj_position = self.create_subscription(Float64MultiArray, 'input_obj_position', self.input_obj_position_callback, input_obj_qos)
 
@@ -66,7 +66,9 @@ class MainNode(Node):
     def mujoco_ready_callback(self, msg):
         if msg.data:
             self.get_logger().info('Mujoco is ready.')
-
+    def ik_ready_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Inverse kinematics is ready.')
 
     def controller_ready_callback(self, msg):
         if msg.data:
