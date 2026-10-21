@@ -1,12 +1,27 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import (
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    RegisterEventHandler,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from launch.event_handlers import OnProcessExit
 import os
 
 
 def generate_launch_description():
+    can_activate = ExecuteProcess(
+        cmd=[
+        "bash",
+        "/home/ubuntu/Projects/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh",
+        "can0",
+        "1000000",
+        ],
+        output="screen",
+    )
+
     agx_arm_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -21,24 +36,30 @@ def generate_launch_description():
             "effector_type": "agx_gripper",
             "tcp_offset": "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
             "control_enabled": "true",
-            "speed_percent": "50",
+            "speed_percent": "10",
         }.items(),
     )
 
-    return LaunchDescription([
-        agx_arm_launch,
-
-        Node(
+    main_node = Node(
             package="nero_ctrl",
             executable="main_node",
             name="main_node",
             output="screen",
-        ),
+    )
 
-        Node(
+    can_module = Node(
             package="nero_ctrl",
             executable="can_module",
             name="can_module",
             output="screen",
+    )
+
+    return LaunchDescription([
+        can_activate,
+        RegisterEventHandler(
+            OnProcessExit(
+                target_action=can_activate,
+                on_exit=[agx_arm_launch, main_node, can_module],
+            )
         ),
     ])
