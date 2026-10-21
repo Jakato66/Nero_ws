@@ -5,14 +5,15 @@
 
 To activate can communication
 ```
-cd ~/agx_arm_ws/src/agx_arm_ros/scripts 
+"from workspace directory"
+cd agx_arm_ws/src/agx_arm_ros/scripts 
 bash can_activate.sh
 ```
 Then
 
 ```
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+source /opt/ros/jazzy/setup.bash "from workspace directory"
+source install/setup.bash "always in any terminal before running any ros2 command"
 ```
 
 ## Enable and disable the robot

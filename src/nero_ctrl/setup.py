@@ -30,6 +30,7 @@ setup(
 		'console_scripts': [
 			'can_module = nero_ctrl.can_module:main',
             'main_node = nero_ctrl.main_node:main',
+            'controller_node = nero_ctrl.controller_node:main',
 		],
 	},
 )
