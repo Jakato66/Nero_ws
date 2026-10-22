@@ -38,7 +38,7 @@ class CanModule(Node):
         self.move_js_pub = self.create_publisher(JointState, "control/move_js", 10)
         
         # others publishers (can modify and use this)
-        self.start_node_publisher = self.create_publisher(Bool, '/start_running_nodes', 10)
+        self.start_node_publisher = self.create_publisher(Bool, '/start_running_nodes', self.init_node_qos)
         
         self.joint_state_publisher_for_ik = self.create_publisher(
             JointState,
@@ -87,13 +87,14 @@ class CanModule(Node):
             msg.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
             self.init_state_joint_pub.publish(msg)
             self.get_logger().info(f"Published initial joint states: {msg.position}")
+            time.sleep(5)
             self.init_pose_ready = True
 
     
     def joint_states_callback(self, msg):
         if self.init_pose_ready:
             states = msg.position
-            self.get_logger().info(f"Received joint states: {states}")
+            # self.get_logger().info(f"Received joint states: {states}")
             self._joint_state.name = msg.name
             self._joint_state.position = msg.position
             self.joint_state_publisher_for_ik.publish(self._joint_state)
@@ -101,6 +102,7 @@ class CanModule(Node):
     def ik_result_callback(self, msg):
         self.get_logger().info(f"Received IK result: {msg.position}")
         # initially only with movej
+        self.move_j_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)

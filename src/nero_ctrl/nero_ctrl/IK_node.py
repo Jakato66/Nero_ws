@@ -27,6 +27,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
 
         self.ik_thread = threading.Thread(target=self.ik_worker, daemon=True)
         self.ik_thread.start()
+        self.mujoco_lock = threading.Lock()
         # QoS profile 
         latch_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -91,8 +92,9 @@ class InverseKinematicsNodeBodyJacobian(Node):
                     return
                 target = self.pending_target.copy()
                 self.pending_target = None
-            if self.model is not None and self.robot_data is not None:
-                self.calculate_inverse_kinematics(target)
+            with self.mujoco_lock:
+                if self.model is not None and self.robot_data is not None:
+                    self.calculate_inverse_kinematics(target)
 
 
     def obj_point_callback(self, msg):
@@ -116,21 +118,21 @@ class InverseKinematicsNodeBodyJacobian(Node):
     def state_callback(self, msg):
         if not msg.position:
             return
+        with self.mujoco_lock:
+            self.current_q = np.array(msg.position, dtype=float)
+            if not self.init_pos_get:
+                self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
+                self.init_q = self.current_q.copy()
+                self.init_pos_get = True
+                self._try_assign_model_data()
 
-        self.current_q = np.array(msg.position, dtype=float)
-        if not self.init_pos_get:
-            self.get_logger().info('Robot is in initial state. Ready to receive target positions.')
-            self.init_q = self.current_q.copy()
-            self.init_pos_get = True
-            self._try_assign_model_data()
-
-        if self.robot_data is not None:
-            qpos_count = min(len(self.current_q), self.model.nq)
-            self.robot_data.qpos[:qpos_count] = self.current_q[:qpos_count]
-            if msg.velocity:
-                qvel_count = min(len(msg.velocity), self.model.nv)
-                self.robot_data.qvel[:qvel_count] = np.array(msg.velocity[:qvel_count])
-            mujoco.mj_forward(self.model, self.robot_data)
+            if self.robot_data is not None:
+                qpos_count = min(len(self.current_q), self.model.nq)
+                self.robot_data.qpos[:qpos_count] = self.current_q[:qpos_count]
+                if msg.velocity:
+                    qvel_count = min(len(msg.velocity), self.model.nv)
+                    self.robot_data.qvel[:qvel_count] = np.array(msg.velocity[:qvel_count])
+                mujoco.mj_forward(self.model, self.robot_data)
 
     # if needed and the rest of code is correct, you can use this to modify velocity, in the beginning of the system this can only be set by launch file
     def init_vel_callback(self, msg):
