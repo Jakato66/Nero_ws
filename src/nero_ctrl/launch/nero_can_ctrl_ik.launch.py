@@ -5,6 +5,8 @@ from launch.actions import (
     RegisterEventHandler,
 )
 from launch.event_handlers import OnProcessExit
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -12,12 +14,26 @@ import os
 
 
 def generate_launch_description():
+    can_usb_address = LaunchConfiguration("can_usb_address")
+
     can_activate = ExecuteProcess(
         cmd=[
             "bash",
             "/home/ubuntu/Projects/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh",
             "can0",
             "1000000",
+            can_usb_address,
+        ],
+        output="screen",
+    )
+
+    can_wait_for_traffic = ExecuteProcess(
+        cmd=[
+            "bash",
+            "-c",
+            "echo 'Waiting for CAN traffic on can0...' && "
+            "until candump -n 1 can0 >/dev/null 2>&1; do sleep 1; done && "
+            "echo 'CAN traffic detected on can0.'",
         ],
         output="screen",
     )
@@ -62,10 +78,21 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "can_usb_address",
+            default_value="3-3.4:1.0",
+            description="USB bus address of the CAN adapter.",
+        ),
         can_activate,
         RegisterEventHandler(
             OnProcessExit(
                 target_action=can_activate,
+                on_exit=[can_wait_for_traffic],
+            )
+        ),
+        RegisterEventHandler(
+            OnProcessExit(
+                target_action=can_wait_for_traffic,
                 on_exit=[agx_arm_launch, main_node, can_module, ik_node],
             )
         ),

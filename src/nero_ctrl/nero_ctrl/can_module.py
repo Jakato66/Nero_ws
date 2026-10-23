@@ -21,6 +21,10 @@ class CanModule(Node):
         self.gripper_name = "gripper"
         self.init_pose = [0.0, -0.40, 0.0, 2.0, 0.0, 0.0, 0.0, 0.05]
         self.init_pose_ready = False
+        self.start_requested = False
+        self.feedback_ready = False
+        self.initial_pose_attempts = 0
+        self.initial_pose_first_sent_at = None
 
 
         # QoS settings
@@ -51,6 +55,7 @@ class CanModule(Node):
         self.create_subscription(Bool, 'start_running_nodes', self.start_node_callback, 10)
         self.create_subscription(JointState, 'feedback/joint_states', self.joint_states_callback, ik_qos)
         self.create_subscription(JointState, 'ik/ik_result', self.ik_result_callback, ik_qos)
+        self.initial_pose_timer = self.create_timer(0.25, self._publish_initial_pose_when_ready)
 
 
     def test_pos_callback(self, msg):
@@ -75,26 +80,44 @@ class CanModule(Node):
         self.get_logger().info(f"Published joint states: {msg.position}")
 
     def start_node_callback(self, msg):
-        time.sleep(1)  # Wait for 1 second before publishing the initial joint states
-        if msg.data and self.init_pose_ready == False:
+        if msg.data and not self.start_requested:
+            self.start_requested = True
             self.get_logger().info('Starting CAN module.')
-            msg = Bool()
-            msg.data = True
-            self.start_node_publisher.publish(msg)
-            msg = JointState()
-            msg.name = self.joint_names + [self.gripper_name]
-            msg.position = self.init_pose
-            msg.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-            self.init_state_joint_pub.publish(msg)
-            self.get_logger().info(f"Published initial joint states: {msg.position}")
-            time.sleep(5)
-            self.init_pose_ready = True
+            self.start_node_publisher.publish(Bool(data=True))
+
+    def _publish_initial_pose_when_ready(self):
+        if not self.start_requested or not self.feedback_ready:
+            return
+
+        now = time.monotonic()
+        if self.initial_pose_first_sent_at is None:
+            self.initial_pose_first_sent_at = now
+            return
+
+        if now - self.initial_pose_first_sent_at < 1.0:
+            return
+        if self.initial_pose_attempts >= 3:
+            self.initial_pose_timer.cancel()
+            return
+        if self.initial_pose_attempts and now - self.initial_pose_first_sent_at < 0.5 * (self.initial_pose_attempts + 1):
+            return
+
+        msg = JointState()
+        msg.name = self.joint_names + [self.gripper_name]
+        msg.position = self.init_pose
+        msg.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        self.init_state_joint_pub.publish(msg)
+        self.initial_pose_attempts += 1
+        self.init_pose_ready = True
+        self.get_logger().info(
+            f"Published initial joint states (attempt {self.initial_pose_attempts}/3): {msg.position}"
+        )
 
     
     def joint_states_callback(self, msg):
+        if len(msg.position) >= len(self.joint_names):
+            self.feedback_ready = True
         if self.init_pose_ready:
-            states = msg.position
-            # self.get_logger().info(f"Received joint states: {states}")
             self._joint_state.name = msg.name
             self._joint_state.position = msg.position
             self.joint_state_publisher_for_ik.publish(self._joint_state)
