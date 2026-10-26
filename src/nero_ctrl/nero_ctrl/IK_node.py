@@ -11,7 +11,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String, Bool, Float64MultiArray
 from sensor_msgs.msg import JointState
 from rosgraph_msgs.msg import Clock
-
+#!TODO AGREGAR GRIPPER A MSJOBJ Y A MENSAJE FINAL
 """This nodes handle the inverse kinematics calculation and send the reasult to
 the controller node and then to the indermediary node"""
 
@@ -153,10 +153,13 @@ class InverseKinematicsNodeBodyJacobian(Node):
         if self.jacp is None or self.jacr is None:
             self.get_logger().error("Jacobian matrices are not initialized. Cannot perform inverse kinematics.")
             return
-
+        if len(target_position) != 7:
+            self.get_logger().error("Target position must be a 7-element array: [x, y, z, roll, pitch, yaw, gripper_position].")
+            return
         # Get the target position and orientation
         target_pos = target_position[:3]
         target_R = self.rpy_to_rotation_matrix(target_position[3:6])
+        gripper_position = target_position[6]
         arm_dof_count = min(len(self.current_q), 7, self.model.nv)
 
         q_copy = np.copy(self.robot_data.qpos[:])
@@ -246,7 +249,6 @@ class InverseKinematicsNodeBodyJacobian(Node):
             if not np.all(np.isfinite(q_copy)):
                 self.get_logger().error("IK produced a non-finite joint position; command was discarded.")
                 return
-            #ingresar a la iteracion
             self.robot_data.qpos[:] = q_copy
             mujoco.mj_forward(self.model, self.robot_data)
             final_position_error = np.linalg.norm(
@@ -264,7 +266,8 @@ class InverseKinematicsNodeBodyJacobian(Node):
             mujoco.mj_forward(self.model, self.robot_data)
 
             #publish the result
-            command = np.concatenate((q_copy[:7], [q_copy[7]]))
+            gripper_position = np.clip(gripper_position, 0.0, 0.05)
+            command = np.concatenate((q_copy[:7], [gripper_position]))
             if not np.all(np.isfinite(command)):
                 self.get_logger().error("IK result is invalid and will not be published.")
                 return

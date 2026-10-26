@@ -82,7 +82,7 @@ class MainNode(Node):
     def input_obj_position_callback(self, msg):
         self.get_logger().info(f"Received input object position: {msg.data}")
         self.publisher_obj_position.publish(msg)
-        # [x, y, z, roll, pitch, yaw]
+        # [x, y, z, roll, pitch, yaw, gripper_position]
 
 
 def main(args=None):
