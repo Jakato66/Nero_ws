@@ -46,7 +46,14 @@ Close: position: [0.0]
 Width range: 0.0 to 0.1 meters
 Force range: 0.5 to 3.0 N
 
-# Launch nero_can_ctrl
+## To send obj point (with gripper)
+```
+ros2 topic pub --once /input_obj_position std_msgs/msg/Float64MultiArray \
+"{data: [0.0, -0.40, 0.0, 2.0, 0.0, 0.0, 0.05]}"
+```
+[x, y, z, roll, pitch, yaw, gripper_position]
+
+## Launch nero_can_ctrl
 ```
 bash ~/Projects/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh
 source /opt/ros/jazzy/setup.bash
