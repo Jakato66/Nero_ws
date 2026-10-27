@@ -10,7 +10,9 @@ Escena  (<scene> dentro de agilex_arm/agilex_nero/):
   1. argumento  model_dir:=/ruta/a/agilex_arm/agilex_nero
   2. variable de entorno NERO_MUJOCO_DIR
   3. share/<pkg>/mujoco/agilex_arm/agilex_nero  (agx_arm_description)
-  4. ~/iPre_nero/src/mujoco/agilex_arm/agilex_nero
+  4. buscando hacia arriba desde este archivo, en cada carpeta ancestro, la ruta
+     mujoco/agilex_arm/agilex_nero o src/mujoco/agilex_arm/agilex_nero
+     (funciona con --symlink-install y con instalacion normal, en cualquier equipo)
 
 Script (mujoco_viewer.py):
   1. argumento  viewer_script:=/ruta/mujoco_viewer.py
@@ -19,7 +21,7 @@ Script (mujoco_viewer.py):
 
 Ejemplos:
   ros2 launch agx_arm_description display_mujoco.launch.py scene:=scene_nero_arm.xml
-  ros2 launch agx_arm_description display_mujoco.launch.py model_dir:=~/iPre_nero/src/mujoco/agilex_arm/agilex_nero
+  ros2 launch agx_arm_description display_mujoco.launch.py model_dir:=/ruta/a/mujoco/agilex_arm/agilex_nero
 """
 
 import os
@@ -43,6 +45,26 @@ def _share(pkg):
         return None
 
 
+def _workspace_model_dirs():
+    """Carpetas candidatas del modelo subiendo desde este archivo (sin rutas fijas).
+
+    Con --symlink-install, realpath(__file__) apunta a src/ y se encuentra src/mujoco/...;
+    con instalacion normal sube hasta la raiz del workspace y prueba <raiz>/src/mujoco/...
+    """
+    this_file = globals().get("__file__")
+    if not this_file:
+        return []
+    found = []
+    d = Path(this_file).resolve().parent
+    while True:
+        found.append(str(d / MODEL_SUBDIR))
+        found.append(str(d / "src" / MODEL_SUBDIR))
+        if d.parent == d:
+            break
+        d = d.parent
+    return found
+
+
 def launch_setup(context, *args, **kwargs):
     scene = LaunchConfiguration("scene").perform(context)
     model_dir_arg = LaunchConfiguration("model_dir").perform(context)
@@ -58,7 +80,7 @@ def launch_setup(context, *args, **kwargs):
         share = _share(pkg)
         if share:
             model_dirs.append(os.path.join(share, MODEL_SUBDIR))
-    model_dirs.append(os.path.expanduser("~/iPre_nero/src/mujoco/agilex_arm/agilex_nero"))
+    model_dirs.extend(_workspace_model_dirs())
 
     scene_file = next(
         (os.path.join(d, scene) for d in model_dirs if os.path.isfile(os.path.join(d, scene))),
