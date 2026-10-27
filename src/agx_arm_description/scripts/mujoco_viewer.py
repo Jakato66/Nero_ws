@@ -430,7 +430,7 @@ class MujocoBridge(Node):
         for idx, (p, qt) in enumerate(poses):
             q, ok, (ep, er) = self._solve_ik(p, qt, q)
             if not ok:
-                return None, (idx, len(poses), ep, er)
+                return None, (idx, len(poses), ep, er, q)
             sols.append(q)
         return sols, None
 
@@ -468,11 +468,15 @@ class MujocoBridge(Node):
                     f'IK: se uso una configuracion alternativa del brazo (rama {tried}).')
                 return [c] + rest
 
-        idx, n, ep, er = fail
+        idx, n, ep, er, qf = fail
         self.get_logger().warn(
             f'Sin solucion IK en el punto {idx + 1}/{n} (error pos {ep * 1000:.1f} mm, '
             f'rot {er:.3f} rad; {tried} configuraciones alternativas probadas): '
             f'movimiento rechazado.')
+        en_limite = [f'joint{k + 1}={qf[k]:.3f}' for k in range(len(qf))
+                     if min(qf[k] - self._q_lo[k], self._q_hi[k] - qf[k]) < 0.02]
+        self.get_logger().warn(f'IK fallo con joints en el limite (<0.02 rad): {en_limite or "ninguno"}; '
+                               f'q = {np.round(qf, 3).tolist()}')
         return None
 
     def _link7_to_flange(self, p, q):
@@ -698,12 +702,6 @@ def main():
                     sim_ref = bridge.data.time
                     wall_ref = time.perf_counter()
 
-                # Cada 5 s, informar el factor de tiempo real (1.0 = tiempo real).
-                if now - last_report >= 5.0:
-                    rtf = (bridge.data.time - report_sim) / (now - last_report)
-                    bridge.get_logger().info(f'Factor de tiempo real: {rtf:.2f}x')
-                    last_report = now
-                    report_sim = bridge.data.time
     except KeyboardInterrupt:
         pass
     finally:

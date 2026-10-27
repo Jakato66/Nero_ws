@@ -14,6 +14,7 @@ Ejemplos:
   ros2 launch nero_ctrl nero_can_ctrl.launch.py
   ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim
   ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim scene:=scene_nero_arm.xml
+  ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim rviz:=false   # sin RViz
   ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=real can_port:=can1
 """
 
@@ -36,6 +37,7 @@ def launch_setup(context, *args, **kwargs):
     mode = LaunchConfiguration("mode").perform(context)
     can_port = LaunchConfiguration("can_port").perform(context)
     scene = LaunchConfiguration("scene").perform(context)
+    rviz = LaunchConfiguration("rviz").perform(context)
     start_delay = float(LaunchConfiguration("start_delay").perform(context))
 
     nodes = [
@@ -83,7 +85,7 @@ def launch_setup(context, *args, **kwargs):
                 "bringup_nero.launch.py",
             )
         ),
-        launch_arguments={"scene": scene}.items(),
+        launch_arguments={"scene": scene, "rviz": rviz}.items(),
     )
     # MuJoCo tarda en cargar; si can_module manda la pose inicial antes de que el
     # bridge se haya suscrito a control/move_j, ese mensaje se pierde. Se retrasan
@@ -109,6 +111,12 @@ def generate_launch_description():
             default_value="scene_nero_arm.xml",
             choices=["scene.xml", "scene_nero_arm.xml", "nero.xml", "nero_arm.xml"],
             description="Escena MuJoCo (solo mode:=sim)",
+        ),
+        DeclareLaunchArgument(
+            "rviz",
+            default_value="true",
+            choices=["true", "false"],
+            description="Lanzar RViz2 (solo mode:=sim)",
         ),
         DeclareLaunchArgument(
             "start_delay",

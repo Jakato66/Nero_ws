@@ -15,6 +15,7 @@ Ejemplos:
   ros2 launch agx_arm_description bringup_nero.launch.py
   ros2 launch agx_arm_description bringup_nero.launch.py scene:=scene_nero_arm.xml
   ros2 launch agx_arm_description bringup_nero.launch.py end_effector:=none
+  ros2 launch agx_arm_description bringup_nero.launch.py rviz:=false   # sin RViz
 """
 
 import os
@@ -23,6 +24,7 @@ import xacro
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -115,6 +117,7 @@ def launch_setup(context, *args, **kwargs):
         name="rviz2",
         output="screen",
         arguments=["-d", rviz_config] if rviz_config else [],
+        condition=IfCondition(LaunchConfiguration("rviz")),
     )
 
     return [mujoco_sim, rsp, rviz]
@@ -133,6 +136,12 @@ def generate_launch_description():
             default_value="gripper",
             choices=["none", "gripper"],
             description="Efector final del URDF que ve RViz",
+        ),
+        DeclareLaunchArgument(
+            "rviz",
+            default_value="true",
+            choices=["true", "false"],
+            description="Lanzar RViz2 (true/false). robot_state_publisher se lanza siempre",
         ),
         OpaqueFunction(function=launch_setup),
     ])
