@@ -1,3 +1,4 @@
+# DOCUMENTACIÓN: Activa la conexión CAN, espera tráfico y después lanza AgileX, coordinación, CAN e IK.
 from launch import LaunchDescription
 from launch.actions import (
     ExecuteProcess,
@@ -13,9 +14,11 @@ from ament_index_python.packages import get_package_share_directory
 import os
 
 
+# Prepara una secuencia de acciones dependiente de la activación y detección del bus CAN.
 def generate_launch_description():
     can_usb_address = LaunchConfiguration("can_usb_address")
 
+    # Activa el adaptador CAN usando un script y una ruta fija del computador original.
     can_activate = ExecuteProcess(
         cmd=[
             "bash",
@@ -27,6 +30,7 @@ def generate_launch_description():
         output="screen",
     )
 
+    # La espera de tráfico CAN condiciona el arranque de los nodos restantes.
     can_wait_for_traffic = ExecuteProcess(
         cmd=[
             "bash",
@@ -77,6 +81,7 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Los manejadores OnProcessExit encadenan las fases de arranque.
     return LaunchDescription([
         DeclareLaunchArgument(
             "can_usb_address",

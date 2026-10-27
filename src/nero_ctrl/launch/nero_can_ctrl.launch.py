@@ -1,3 +1,4 @@
+# DOCUMENTACIÓN: Elige entre backend real CAN o simulado MuJoCo y lanza main_node y can_module.
 """
 nero_ctrl — nero_can_ctrl.launch.py
 ====================================
@@ -32,6 +33,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
+# Selecciona e incorpora el backend adecuado según mode (real o sim).
 def launch_setup(context, *args, **kwargs):
     mode = LaunchConfiguration("mode").perform(context)
     can_port = LaunchConfiguration("can_port").perform(context)
@@ -53,6 +55,7 @@ def launch_setup(context, *args, **kwargs):
         ),
     ]
 
+    # En modo real se utiliza el launch del controlador de AgileX.
     if mode == "real":
         # Los paquetes del brazo real solo se buscan en este modo: para simular
         # no hace falta agx_arm_ctrl ni tener can0 activo.
@@ -75,6 +78,7 @@ def launch_setup(context, *args, **kwargs):
         return [backend, *nodes]
 
     # mode == "sim"
+    # En la rama de simulación, la inclusión corresponde al launch bringup_nero.
     backend = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -91,6 +95,7 @@ def launch_setup(context, *args, **kwargs):
     return [backend, TimerAction(period=start_delay, actions=nodes)]
 
 
+# Declara los argumentos de lanzamiento y delega la construcción en launch_setup.
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
