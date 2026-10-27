@@ -1,3 +1,4 @@
+# DOCUMENTACIÓN: Lanza simulador, robot_state_publisher y RViz para Nero.
 """
 agx_arm_description — bringup_nero.launch.py
 ====================================================
@@ -28,6 +29,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
+# Localiza un archivo de lanzamiento entre rutas disponibles.
 def _find_launch(name):
     """Busca <name> junto a este archivo y, si no, en launch/ de los paquetes conocidos."""
     candidates = []
@@ -47,6 +49,7 @@ def _find_launch(name):
     )
 
 
+# Obtiene el URDF del robot desde los diseños compatibles.
 def _build_robot_description(desc_share, end_effector):
     """Devuelve el URDF (string) del Nero, probando los dos layouts conocidos."""
     # Layout iPre_nero: un unico xacro de entrada con mappings.
@@ -80,6 +83,7 @@ def _build_robot_description(desc_share, end_effector):
     )
 
 
+# Combina el lanzamiento MuJoCo, publicación del modelo y RViz.
 def launch_setup(context, *args, **kwargs):
     end_effector = LaunchConfiguration("end_effector").perform(context)
 
@@ -120,6 +124,7 @@ def launch_setup(context, *args, **kwargs):
     return [mujoco_sim, rsp, rviz]
 
 
+# Expone argumentos de escena y tipo de efector final.
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(

@@ -1,3 +1,4 @@
+# DOCUMENTACIÓN: Selecciona escena/script e inicia el puente MuJoCo como proceso Python.
 """
 display_mujoco.launch.py
 =========================
@@ -36,6 +37,7 @@ PACKAGES = ("agx_arm_description",)
 MODEL_SUBDIR = os.path.join("mujoco", "agilex_arm", "agilex_nero")
 
 
+# Obtiene la carpeta instalada de un paquete ROS 2 si existe.
 def _share(pkg):
     try:
         return get_package_share_directory(pkg)
@@ -43,6 +45,7 @@ def _share(pkg):
         return None
 
 
+# Busca escena MuJoCo y script del visor antes de construir el proceso.
 def launch_setup(context, *args, **kwargs):
     scene = LaunchConfiguration("scene").perform(context)
     model_dir_arg = LaunchConfiguration("model_dir").perform(context)
@@ -98,6 +101,7 @@ def launch_setup(context, *args, **kwargs):
     ]
 
 
+# Declara argumentos opcionales para escena y rutas.
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
