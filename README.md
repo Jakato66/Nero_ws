@@ -128,3 +128,7 @@ source ~/iPre_nero/install/setup.bash
 ```bash
 ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim
 ```
+Without rviz
+```bash
+ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim rviz:=false
+```
