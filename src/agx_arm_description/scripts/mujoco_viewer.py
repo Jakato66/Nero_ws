@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DOCUMENTACIÓN: Implementa un backend simulado ROS 2 compatible con tópicos de control y realimentación AgileX.
 """
 mujoco_viewer.py — Puente ROS2 <-> MuJoCo para el brazo Nero
 ==============================================================
@@ -57,6 +58,7 @@ BASE_BODY = 'base_link'
 # --------------------------------------------------------------------------------------
 # Utilidades de rotaciones (cuaterniones en orden MuJoCo: w, x, y, z)
 # --------------------------------------------------------------------------------------
+# Multiplica cuaterniones en el convenio de MuJoCo (w, x, y, z).
 def quat_mul(a, b):
     aw, ax, ay, az = a
     bw, bx, by, bz = b
@@ -68,10 +70,12 @@ def quat_mul(a, b):
     ])
 
 
+# Devuelve el conjugado de un cuaternión.
 def quat_conj(q):
     return np.array([q[0], -q[1], -q[2], -q[3]])
 
 
+# Convierte una matriz de rotación a cuaternión.
 def mat_to_quat(R):
     t = np.trace(R)
     if t > 0.0:
@@ -90,6 +94,7 @@ def mat_to_quat(R):
     return q / np.linalg.norm(q)
 
 
+# Convierte un cuaternión a matriz de rotación.
 def quat_to_mat(q):
     w, x, y, z = q / np.linalg.norm(q)
     return np.array([
@@ -99,6 +104,7 @@ def quat_to_mat(q):
     ])
 
 
+# Calcula error de orientación entre cuaterniones.
 def quat_error(q_target, q_current):
     """Vector de rotacion (marco mundo) que lleva q_current a q_target."""
     q_err = quat_mul(q_target, quat_conj(q_current))
@@ -111,6 +117,7 @@ def quat_error(q_target, q_current):
     return v / s * 2.0 * math.atan2(s, q_err[0])
 
 
+# Interpola orientaciones mediante interpolación esférica.
 def quat_slerp(q0, q1, t):
     t = min(max(t, 0.0), 1.0)
     d = float(np.dot(q0, q1))
@@ -123,6 +130,7 @@ def quat_slerp(q0, q1, t):
     return (math.sin((1 - t) * th) * q0 + math.sin(t * th) * q1) / math.sin(th)
 
 
+# Construye puntos de una trayectoria circular usando tres puntos geométricos.
 def arc_waypoints(p0, pm, p1, n):
     """Puntos de un arco circular que pasa por p0 -> pm -> p1.
 
@@ -159,7 +167,9 @@ def arc_waypoints(p0, pm, p1, n):
 # --------------------------------------------------------------------------------------
 # Nodo puente
 # --------------------------------------------------------------------------------------
+# Actúa como controlador ROS 2 simulado del brazo Nero.
 class MujocoBridge(Node):
+    # Carga MuJoCo, identifica joints/actuadores y configura ROS 2 y el visor.
     def __init__(self, scene_path: str, control_topic: str, feedback_topic: str,
                  rate_hz: float, move_j_topic: str = 'control/move_j',
                  joint_speed: float = 0.8, lin_speed: float = 0.1, gravcomp: bool = True,
@@ -267,6 +277,7 @@ class MujocoBridge(Node):
         self._jgoal = None   # objetivo articular de move_j (seguidor con limite de velocidad)
         self._data_lock = threading.Lock()
 
+        # Los tópicos de entrada permiten aceptar comandos sin conectar físicamente el bus CAN.
         self.control_sub = self.create_subscription(
             JointState, control_topic, self._on_control_msg, 10)
         self.move_j_sub = self.create_subscription(
@@ -278,6 +289,7 @@ class MujocoBridge(Node):
         self.move_c_sub = self.create_subscription(
             PoseArray, 'control/move_c', self._on_move_c, 10)
 
+        # La salida de feedback permite reutilizar los mismos suscriptores del modo real.
         self.feedback_pub = self.create_publisher(JointState, feedback_topic, 10)
         self.tcp_pub = self.create_publisher(PoseStamped, 'feedback/tcp_pose', 10)
         self.create_timer(1.0 / rate_hz, self._publish_feedback)
@@ -288,6 +300,7 @@ class MujocoBridge(Node):
             f'feedback/tcp_pose a {rate_hz} Hz.')
 
     # ------------------------------------------------------------------ pinza
+    # Convierte el ancho total solicitado a desplazamiento del actuador de la pinza.
     def _set_gripper_locked(self, width):
         g_id = self._actuator_ids.get('gripper')
         if g_id is None or self._gripper_max is None:
@@ -295,6 +308,7 @@ class MujocoBridge(Node):
         self.data.ctrl[g_id] = min(max(width / 2.0, 0.0), self._gripper_max)
 
     # --------------------------------------------------------- comandos directos
+    # Aplica directamente comandos articulares y de pinza sin planificar trayectoria.
     def _on_control_msg(self, msg: JointState):
         """control/joint_states: posicion directa a los actuadores (sin planificar)."""
         with self._data_lock:
@@ -311,10 +325,12 @@ class MujocoBridge(Node):
                 self.data.ctrl[actuator_id] = pos
 
     # ----------------------------------------------------------- trayectorias
+    # Devuelve una copia de la configuración articular simulada actual.
     def _q_now(self):
         with self._data_lock:
             return self.data.qpos[self._arm_qadr].copy()
 
+    # Inicializa el seguimiento de una lista de puntos articulares.
     def _start_trajectory(self, Q, path_len=0.0):
         """Programa una trayectoria articular suave por los waypoints Q (N x 7)."""
         Q = np.asarray(Q, dtype=float)
@@ -330,6 +346,7 @@ class MujocoBridge(Node):
             self._jgoal = None
         return T
 
+    # Interpola el siguiente comando según el tiempo simulado.
     def _advance_trajectory(self):
         """Se llama desde step() con el lock tomado."""
         tr = self._traj
@@ -351,6 +368,7 @@ class MujocoBridge(Node):
         if done:
             self._traj = None
 
+    # Acerca gradualmente los actuadores a la meta de move_j.
     def _follow_joint_goal(self):
         """Seguidor de objetivo articular para move_j (con el lock tomado).
 
@@ -372,6 +390,7 @@ class MujocoBridge(Node):
         self.data.ctrl[self._arm_aid] = cur + err / n * step
 
     # --------------------------------------------------------------- cinematica
+    # Calcula la pose del efector a partir de los ángulos, relativa a la base.
     def _fk_base(self, q):
         """Pose (p, quat wxyz) de link7 en base_link para los joints q."""
         d = self._ik_data
@@ -382,6 +401,7 @@ class MujocoBridge(Node):
         R_w = d.xmat[self._flange_id].reshape(3, 3)
         return self._base_R.T @ (p_w - self._base_p), mat_to_quat(self._base_R.T @ R_w)
 
+    # Resuelve IK con mínimos cuadrados amortiguados y límites articulares.
     def _solve_ik(self, p_b, q_b, q_seed, max_iter=400, tol_p=2e-3, tol_r=2e-2):
         """IK por Jacobiano (minimos cuadrados amortiguados). Objetivo en marco base."""
         m, d = self.model, self._ik_data
@@ -420,6 +440,7 @@ class MujocoBridge(Node):
         ok = np.linalg.norm(e_p) < tol_p and np.linalg.norm(e_r) < tol_r
         return q, bool(ok), (float(np.linalg.norm(e_p)), float(np.linalg.norm(e_r)))
 
+    # Resuelve IK de una secuencia de poses, usando cada resultado como semilla.
     def _solve_path(self, poses, q_seed):
         """IK secuencial (cada waypoint parte de la solucion anterior).
 
@@ -434,6 +455,7 @@ class MujocoBridge(Node):
             sols.append(q)
         return sols, None
 
+    # Intenta resolver una trayectoria completa y prueba semillas alternativas si falla.
     def _plan_path(self, poses, q_now, max_jump=np.inf, n_seeds=30, max_branches=6):
         """Resuelve la IK de toda la trayectoria, probando otras configuraciones si hace falta.
 
@@ -475,15 +497,18 @@ class MujocoBridge(Node):
             f'movimiento rechazado.')
         return None
 
+    # Convierte pose de link7 al marco de brida empleado por el SDK.
     def _link7_to_flange(self, p, q):
         """Pose de link7 -> pose de la brida del SDK (marco base, q = wxyz)."""
         return p + quat_to_mat(q) @ self._t_off, quat_mul(q, self._q_off)
 
+    # Convierte pose de brida SDK a pose de link7 para resolver IK.
     def _flange_to_link7(self, p, q):
         """Pose de la brida del SDK -> pose de link7 (lo que resuelve la IK)."""
         q7 = quat_mul(q, quat_conj(self._q_off))
         return p - quat_to_mat(q7) @ self._t_off, q7
 
+    # Extrae posición/cuaternión de Pose y lo transforma al marco de link7.
     def _pose_to_arrays(self, pose):
         """geometry_msgs/Pose (convencion del SDK) -> (p, quat wxyz) de link7."""
         p = np.array([pose.position.x, pose.position.y, pose.position.z], dtype=float)
@@ -495,6 +520,8 @@ class MujocoBridge(Node):
         return self._flange_to_link7(p, q / n)
 
     # -------------------------------------------------------- callbacks de movimiento
+    # Establece un objetivo articular con límites de posición y de velocidad.
+    # El objetivo se almacena; el avance hacia él ocurre dentro del bucle de simulación.
     def _on_move_j(self, msg: JointState):
         """control/move_j: objetivo articular; admite mensajes sueltos o flujos rapidos."""
         with self._data_lock:
@@ -520,6 +547,7 @@ class MujocoBridge(Node):
         if moved and starting:
             self.get_logger().info('move_j: nuevo objetivo articular.')
 
+    # Planifica movimiento hacia una única pose objetivo.
     def _on_move_p(self, msg: PoseStamped):
         try:
             p, q = self._pose_to_arrays(msg.pose)
@@ -534,6 +562,7 @@ class MujocoBridge(Node):
         if T:
             self.get_logger().info(f'move_p: {T:.1f} s')
 
+    # Genera una secuencia cartesiana interpolada linealmente.
     def _on_move_l(self, msg: PoseStamped):
         try:
             p1, qt1 = self._pose_to_arrays(msg.pose)
@@ -557,6 +586,7 @@ class MujocoBridge(Node):
         if T:
             self.get_logger().info(f'move_l: {T:.1f} s')
 
+    # Genera un recorrido circular pasando por puntos intermedios.
     def _on_move_c(self, msg: PoseArray):
         q0 = self._q_now()
         try:
@@ -592,6 +622,7 @@ class MujocoBridge(Node):
             self.get_logger().info(f'move_c: {T:.1f} s')
 
     # ------------------------------------------------------------------ feedback
+    # Publica la realimentación articular y la pose del efector.
     def _publish_feedback(self):
         stamp = self.get_clock().now().to_msg()
         js = JointState()
@@ -633,12 +664,14 @@ class MujocoBridge(Node):
         ps.pose.orientation.z = float(q_b[3])
         self.tcp_pub.publish(ps)
 
+    # Aplica comandos pendientes y avanza un paso de la simulación.
     def step(self):
         with self._data_lock:
             self._advance_trajectory()
             mujoco.mj_step(self.model, self.data)
 
 
+# Analiza argumentos, ejecuta un hilo ROS 2 y mantiene el visor y la física.
 def main():
     parser = argparse.ArgumentParser(description='Puente ROS2 <-> MuJoCo para el brazo Nero')
     parser.add_argument('scene', help='Ruta absoluta al archivo de escena MuJoCo (.xml)')
