@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DOCUMENTACIÓN: Ejecuta una simulación MuJoCo, aplica vectores articulares de IK y publica reloj/estados.
 
 import rclpy
 import os
@@ -15,7 +16,9 @@ from rosgraph_msgs.msg import Clock
 """This node handle the mujoco simulator"""
 
 
+# Coordina el visor físico MuJoCo y el intercambio de mensajes con ROS 2.
 class MujocoNode(Node):
+    # Inicializa la ruta del modelo, canales de ROS 2 y flags de ejecución.
     def __init__(self):
         super().__init__('mujoco_node')
         self.get_logger().info('Mujoco node has been started.')
@@ -29,6 +32,7 @@ class MujocoNode(Node):
         self.ready_sent = False
         self.last_command = None
         # This may change if needed
+        # Ruta del XML: puede no existir si se clona el repositorio en otro directorio.
         self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
         
         # publishers
@@ -45,6 +49,7 @@ class MujocoNode(Node):
         )
         self.subscription = self.create_subscription(Float64MultiArray, '/inverse_kinematics_result', self.inverse_kinematics_result_callback, 10)
     
+    # Valida un objetivo de ocho actuadores y lo guarda como último comando.
     def inverse_kinematics_result_callback(self, msg):
         # get the data form the msg
         self.get_logger().info(f"Received inverse kinematics result: {msg.data}")
@@ -55,11 +60,13 @@ class MujocoNode(Node):
         self.last_command = command
         
         
+    # Habilita el inicio del simulador cuando llega la señal True.
     def start_running_nodes_callback(self, msg):
         if msg.data and not self.start_requested:
             self.get_logger().info('Starting Mujoco simulator.')
             self.start_requested = True
     
+    # Aplica el último comando, avanza un paso de física y publica reloj y articulaciones.
     def update_simulation(self, model, data):
         # apply the last command received from the inverse kinematics node
         if self.last_command is not None:
@@ -79,12 +86,14 @@ class MujocoNode(Node):
         self.publisher_clock_sim.publish(clock_msg)
         
         # share joint states
+        # El mensaje publicado aquí incluye posiciones, pero no nombres de articulaciones.
         joint_state_msg = JointState()
         joint_state_msg.position = data.qpos[:7].tolist()
         self.publisher_joint_state.publish(joint_state_msg)
         
         
             
+# Espera la señal de arranque, abre el visor MuJoCo y actualiza física/ROS 2.
 def main(args=None):
     rclpy.init(args=args)
     mujoco_node = MujocoNode()

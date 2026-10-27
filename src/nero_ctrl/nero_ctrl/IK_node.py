@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# DOCUMENTACIÓN: Resuelve objetivos cartesianos mediante jacobiano del cuerpo y publica JointState al control.
 import rclpy
 import os
 import sys
@@ -15,7 +16,9 @@ from rosgraph_msgs.msg import Clock
 """This nodes handle the inverse kinematics calculation and send the reasult to
 the controller node and then to the indermediary node"""
 
+# Nodo de cinemática inversa basado en el modelo MuJoCo y en el Jacobiano del efector.
 class InverseKinematicsNodeBodyJacobian(Node):
+    # Inicializa estados, hilo de cálculo, bloqueos y comunicaciones ROS 2.
     def __init__(self):
         super().__init__('inverse_kinematics_node')
         self.get_logger().info('Inverse Kinematics Node has been started.')
@@ -25,6 +28,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
         self.pending_target = None
         self.stop_ik_thread = False
 
+        # El hilo se inicia antes de que lleguen objetivos; queda a la espera en una condición.
         self.ik_thread = threading.Thread(target=self.ik_worker, daemon=True)
         self.ik_thread.start()
         self.mujoco_lock = threading.Lock()
@@ -84,6 +88,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
         self.init_subscription = self.create_subscription(Bool, 'start_running_nodes', self.start_running_nodes_callback, latch_qos)
     
     
+    # Espera objetivos pendientes y realiza el cálculo sin bloquear las callbacks ROS 2.
     def ik_worker(self):
         while rclpy.ok():
             with self.ik_condition:
@@ -97,12 +102,14 @@ class InverseKinematicsNodeBodyJacobian(Node):
                     self.calculate_inverse_kinematics(target)
 
 
+    # Registra un nuevo objetivo cartesiano y despierta el hilo de IK.
     def obj_point_callback(self, msg):
         self.get_logger().info(f"Received object point: {msg.data}")
         with self.ik_condition:
             self.pending_target = np.array(msg.data, dtype=float)
             self.ik_condition.notify()
 
+    # Confirma que el nodo recibió el evento de inicio.
     def start_running_nodes_callback(self, msg):
         if msg.data and not self.ready_sent:
             self.get_logger().info('Starting Inverse Kinematics Node.')
@@ -115,6 +122,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.ready_sent = True
 
     # get initial pose when robot is ready
+    # Actualiza el estado articular medido y la copia de datos cinemáticos MuJoCo.
     def state_callback(self, msg):
         if not msg.position:
             return
@@ -135,6 +143,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
                 mujoco.mj_forward(self.model, self.robot_data)
 
     # if needed and the rest of code is correct, you can use this to modify velocity, in the beginning of the system this can only be set by launch file
+    # Guarda las velocidades iniciales cuando se reciben en el tópico.
     def init_vel_callback(self, msg):
         if msg.data:
             self.get_logger().info('Robot initial velocity received.')
@@ -142,6 +151,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.init_vel = np.array(msg.data)
 
     # Math functions
+    # Ajusta iterativamente los ángulos para aproximar la posición y orientación objetivo.
     def calculate_inverse_kinematics(self, target_position):
         self.get_logger().info(f"Calculating inverse kinematics for target position: {target_position}")
         if self.current_q is None:
@@ -155,6 +165,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             return
 
         # Get the target position and orientation
+        # Se separan traslación XYZ y orientación RPY del objetivo recibido.
         target_pos = target_position[:3]
         target_R = self.rpy_to_rotation_matrix(target_position[3:6])
         arm_dof_count = min(len(self.current_q), 7, self.model.nv)
@@ -175,6 +186,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
 
         arm_joint_ranges = self.model.jnt_range[:arm_dof_count]
 
+        # Iteración numérica: calcula error, Jacobiano y corrección de las articulaciones.
         for i in range(max_iter):
             self.robot_data.qpos[:] = q_copy
             mujoco.mj_forward(self.model, self.robot_data)
@@ -218,6 +230,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             # inverse
             Ad_T_inv = np.linalg.inv(Ad_T)
             #jacobian of the body
+            # El Jacobiano espacial se transforma a la representación en el marco del cuerpo.
             J_b = Ad_T_inv @ J
 
             body_error = Ad_T_inv @ space_error
@@ -269,6 +282,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
                 self.get_logger().error("IK result is invalid and will not be published.")
                 return
 
+            # El resultado se publica como ocho posiciones: siete joints y gripper.
             result_msg = JointState()
             result_msg.name = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7", "gripper"]
             data = command.tolist()
@@ -281,11 +295,13 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.robot_data.qpos[:arm_dof_count] = self.current_q[:arm_dof_count]
             mujoco.mj_forward(self.model, self.robot_data)
 
+            # Pausa por iteración; el programa puede publicar resultados intermedios.
             time.sleep(0.01)  # Small delay to ensure the message is sent before the next iteration
 
 
 
 
+    # Convierte roll, pitch y yaw a una matriz de rotación 3×3.
     def rpy_to_rotation_matrix(self, rpy):
         roll, pitch, yaw = rpy
         cr, sr = np.cos(roll), np.sin(roll)
@@ -303,11 +319,13 @@ class InverseKinematicsNodeBodyJacobian(Node):
         R = Rz @ Ry @ Rx
         return R
 
+    # Construye la matriz antisimétrica asociada a un vector 3D.
     def vector_to_skew_symmetric(self, p):
         p = np.asarray(p, dtype=float).flatten()
         return np.array([[0, -p[2], p[1]],
                          [p[2], 0, -p[0]],
                          [-p[1], p[0], 0]])
+    # Forma la matriz adjunta de una transformación rígida.
     def calculate_adj_matrix(self, R, p):
         R = np.asarray(R, dtype=float)
         p_skew = self.vector_to_skew_symmetric(p)
@@ -319,6 +337,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
         return adj
 
     # Model Functions
+    # Inicializa datos de MuJoCo solo cuando están listos modelo y estado inicial.
     def _try_assign_model_data(self):
         if self.model is None or self.robot_data is None or self.init_q is None:
             return False
@@ -326,6 +345,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
         self.assign_model_data(self.init_q, self.init_vel)
         return True
 
+    # Prepara coordenadas, velocidades, identificadores del efector y matrices jacobianas.
     def assign_model_data(self, init_q, init_vel):
         if self.model is not None and self.robot_data is not None:
             qpos = np.zeros(self.model.nq)
@@ -354,6 +374,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
             self.get_logger().error('Model or robot data is not initialized. Cannot assign data.')
             return False
 
+    # Carga el modelo MuJoCo desde la ruta anunciada por otro nodo.
     def get_model_callback(self, msg):
         if msg.data:
             self.model_path = msg.data
@@ -369,6 +390,7 @@ class InverseKinematicsNodeBodyJacobian(Node):
 
     
     
+# Arranca ROS 2 y detiene ordenadamente el hilo de cinemática al salir.
 def main(args=None):
     rclpy.init(args=args)
     inverse_kinematics_node = InverseKinematicsNodeBodyJacobian()
