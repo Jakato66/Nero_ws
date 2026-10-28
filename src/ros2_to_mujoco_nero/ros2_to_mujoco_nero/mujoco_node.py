@@ -15,6 +15,26 @@ from rosgraph_msgs.msg import Clock
 """This node handle the mujoco simulator"""
 
 
+def find_scene_xml():
+    """Locate scene.xml without hardcoded paths.
+
+    Priority: env var NERO_SCENE_XML, then search upwards from this file
+    for src/models_for_simulation/agilex_nero/scene.xml.
+    """
+    import os
+    from pathlib import Path
+    env = os.environ.get('NERO_SCENE_XML')
+    if env and Path(env).is_file():
+        return env
+    rel = Path('src/models_for_simulation/agilex_nero/scene.xml')
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / rel
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(
+        'scene.xml not found. Set NERO_SCENE_XML to its full path.')
+
+
 class MujocoNode(Node):
     def __init__(self):
         super().__init__('mujoco_node')
@@ -29,7 +49,7 @@ class MujocoNode(Node):
         self.ready_sent = False
         self.last_command = None
         # This may change if needed
-        self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
+        self.model_path = find_scene_xml()
         
         # publishers
         self.publisher_state_ready = self.create_publisher(Bool, '/mujoco_ready', latch_qos)

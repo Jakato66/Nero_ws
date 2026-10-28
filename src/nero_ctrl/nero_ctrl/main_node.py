@@ -10,6 +10,26 @@ from geometry_msgs.msg import Pose
 launched. It will start the main loop of the simulation and will also ensure 
 that all the nodes ar up and running"""
 
+def find_scene_xml():
+    """Locate scene.xml without hardcoded paths.
+
+    Priority: env var NERO_SCENE_XML, then search upwards from this file
+    for src/models_for_simulation/agilex_nero/scene.xml.
+    """
+    import os
+    from pathlib import Path
+    env = os.environ.get('NERO_SCENE_XML')
+    if env and Path(env).is_file():
+        return env
+    rel = Path('src/models_for_simulation/agilex_nero/scene.xml')
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / rel
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(
+        'scene.xml not found. Set NERO_SCENE_XML to its full path.')
+
+
 class MainNode(Node):
     def __init__(self):
         super().__init__('main_node')
@@ -18,7 +38,7 @@ class MainNode(Node):
         # atributes
         self.timer_pr = 0.01 # 100Hz
         self.start_sent = False
-        self.model_path = os.path.expanduser('~/Projects/iPre_nero/src/models_for_simulation/agilex_nero/scene.xml')
+        self.model_path = find_scene_xml()
         model_path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         input_obj_qos = QoSProfile(depth=10)
         

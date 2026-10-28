@@ -6,11 +6,6 @@ Lanza en un solo comando:
      display_mujoco.launch.py (mismo directorio launch/).
   2. robot_state_publisher + RViz2 siguiendo `feedback/joint_states` (sin sliders).
 
-NO incluye el display.launch.py de agx_arm_description: construye el URDF por su
-cuenta a partir de los archivos del paquete, asi funciona igual con la version de
-iPre_nero (urdf/agx_arm_description.urdf.xacro) que con la de agx_arm_ros
-(agx_arm_urdf/nero/urdf/...). Los sliders (joint_state_publisher_gui) nunca se lanzan.
-
 Ejemplos:
   ros2 launch agx_arm_description bringup_nero.launch.py
   ros2 launch agx_arm_description bringup_nero.launch.py scene:=scene_nero_arm.xml
@@ -51,7 +46,7 @@ def _find_launch(name):
 
 def _build_robot_description(desc_share, end_effector):
     """Devuelve el URDF (string) del Nero, probando los dos layouts conocidos."""
-    # Layout iPre_nero: un unico xacro de entrada con mappings.
+    # Layout: un unico xacro de entrada con mappings.
     legacy = os.path.join(desc_share, "urdf", "agx_arm_description.urdf.xacro")
     if os.path.exists(legacy):
         return xacro.process_file(

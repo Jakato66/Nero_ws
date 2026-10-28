@@ -6,7 +6,7 @@
 To activate can communication
 ```
 "from workspace directory"
-cd agx_arm_ws/src/agx_arm_ros/scripts 
+cd src/agx_arm_ros/scripts 
 bash can_activate.sh
 ```
 Then
@@ -48,11 +48,11 @@ Force range: 0.5 to 3.0 N
 
 # Launch nero_can_ctrl
 ```
-bash ~/Projects/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh
 source /opt/ros/jazzy/setup.bash
-source ~/Projects/agx_arm_ws/install/setup.bash
-source ~/Projects/iPre_nero/install/setup.bash
+"from workspace directory"
+bash agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh
+source install/setup.bash
+
 
 ros2 launch nero_ctrl nero_can_ctrl.launch.py
-ros2 launch nero_ctrl nero_can_ctrl_ik.launch.py
 ```
