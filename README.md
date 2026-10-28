@@ -29,7 +29,7 @@ pip3 install .
 Run the script to install all dependencies at once:
 
 ```bash
-cd ~/iPre_nero/src/agx_arm_ros/scripts/
+cd ~/Nero_ws/src/agx_arm_ros/scripts/
 chmod +x agx_arm_install_deps.sh
 bash ./agx_arm_install_deps.sh
 ```
@@ -111,7 +111,7 @@ which pip3
 Build and Source the workspace:
 
 ```bash
-cd ~/iPre_nero
+cd ~/Nero_ws
 colcon build
 source install/setup.bash
 ```
@@ -121,7 +121,7 @@ source install/setup.bash
 ```bash
 source /opt/ros/jazzy/setup.bash
 source /opt/ros/humble/setup.bash
-source ~/iPre_nero/install/setup.bash
+source ~/Nero_ws/install/setup.bash
 ```
 ### 2. Launch nero_can_ctrl.launch.py
 
@@ -132,3 +132,53 @@ Without rviz
 ```bash
 ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim rviz:=false
 ```
+
+## Test
+
+### Nero
+
+1. Joint motion
+
+    ```bash
+    ros2 topic pub /control/move_j sensor_msgs/msg/JointState \
+      "$(cat test/nero/test_move_j.yaml)" -1
+    ```
+
+2. Point-to-point motion
+
+    ```bash
+    ros2 topic pub /control/move_p geometry_msgs/msg/PoseStamped \
+      "$(cat test/nero/test_move_p.yaml)" -1
+    ```
+
+3. Linear motion
+
+    ```bash
+    ros2 topic pub /control/move_l geometry_msgs/msg/PoseStamped \
+      "$(cat test/nero/test_move_l.yaml)" -1
+    ```
+
+4. Circular motion (start → middle → end)
+
+    ```bash
+    ros2 topic pub /control/move_c geometry_msgs/msg/PoseArray \
+      "$(cat test/nero/test_move_c.yaml)" -1
+    ```
+
+### Gripper
+
+1. Gripper control (via `/control/joint_states`)
+
+    ```bash
+    ros2 topic pub /control/joint_states sensor_msgs/msg/JointState \
+      "$(cat test/gripper/test_gripper_joint_states.yaml)" -1
+    ```
+
+2. Arm + Gripper combined control (via `/control/joint_states`)
+
+    ```bash
+    ros2 topic pub /control/joint_states sensor_msgs/msg/JointState \
+      "$(cat test/piper/test_arm_gripper_joint_states.yaml)" -1
+    ```
+
+*Note: For more information refer to [this](/src/agx_arm_ros/README.md) README.*
