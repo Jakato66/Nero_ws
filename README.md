@@ -133,7 +133,15 @@ Without rviz
 ros2 launch nero_ctrl nero_can_ctrl.launch.py mode:=sim rviz:=false
 ```
 
-## Test
+## Control Examples
+
+Open an additional terminal and run the following commands:
+
+```bash
+cd ~/Nero_ws
+source install/setup.bash
+cd src/agx_arm_ros
+```
 
 ### Nero
 
