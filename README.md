@@ -190,3 +190,12 @@ cd src/agx_arm_ros
     ```
 
 *Note: For more information refer to [this](/src/agx_arm_ros/README.md) README.*
+
+
+To return to the initial position use run the following command:
+```bash
+ros2 topic pub --once /control/move_j sensor_msgs/msg/JointState \
+"{name: [joint1, joint2, joint3, joint4, joint5, joint6, joint7, gripper],
+  position: [0.0, -0.40, 0.0, 2.0, 0.0, 0.0, 0.0, 0.05],
+  effort: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]}"
+  ```
